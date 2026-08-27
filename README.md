@@ -1,15 +1,16 @@
 # Nidario
 
-Nidario é um atlas web de aves da Península Ibérica com identificação por foto.
-O utilizador submete uma imagem e recebe a espécie mais provável, com apoio a exploração do atlas de espécies.
+Nidario is a web atlas of birds of the Iberian Peninsula. It lets users browse bird sightings across the region and explore a species atlas, alongside user-facing features.
 
-## Arquitetura
+Users can upload a photo to get the most likely species, browse the species atlas, and geographically log where the sighting occurred.
 
-_(placeholder — a preencher quando a stack for implementada: FastAPI, BioCLIP 2, Azure SQL, Docker, GitHub Actions)_
+## Architecture
+
+_(placeholder — to be filled once the stack is implemented: FastAPI, BioCLIP 2, Azure SQL, Docker, GitHub Actions)_
 
 ## Setup
 
-Criar e ativar o ambiente virtual, depois instalar as dependências:
+Create and activate the virtual environment, then install dependencies:
 
 ```powershell
 python -m venv .venv
