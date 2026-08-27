@@ -18,6 +18,14 @@ def parse_args() -> argparse.Namespace:
         default="cpu",
         help="Inference device (default: cpu, matches production target)",
     )
+    parser.add_argument(
+        "--species-list",
+        type=Path,
+        default=None,
+        help="Optional path to a text file of BioCLIP species names to restrict "
+        "predictions to (one per line; a second comma-separated column, if "
+        "present, is ignored)",
+    )
     return parser.parse_args()
 
 
@@ -39,6 +47,17 @@ def main() -> None:
         sys.exit(f"Error: image not found: {args.image_path}")
 
     classifier = TreeOfLifeClassifier(device=args.device)
+
+    if args.species_list:
+        if not args.species_list.is_file():
+            sys.exit(f"Error: species list not found: {args.species_list}")
+        species_names = [
+            line.strip().split(",")[0]
+            for line in args.species_list.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        taxa_filter = classifier.create_taxa_filter(Rank.SPECIES, species_names)
+        classifier.apply_filter(taxa_filter)
 
     start = time.perf_counter()
     predictions = classifier.predict(args.image_path, Rank.SPECIES, k=5)
