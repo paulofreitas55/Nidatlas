@@ -20,9 +20,13 @@ pip install -r requirements.txt
 
 ## Data sources
 
-GBIF.org (27 August 2026) GBIF Occurrence Download https://doi.org/10.15468/dl.sddbky
+**Species list.** GBIF.org (27 August 2026) GBIF Occurrence Download https://doi.org/10.15468/dl.sddbky
 
 Covers bird species of Portugal and Spain. Includes only CC0 and CC-BY licensed records.
+
+**Occurrence cube.** GBIF.org (27 August 2026) GBIF Occurrence Download https://doi.org/10.15468/dl.t4t9e4
+
+Species × year-month × EEA 10km grid, for birds of Portugal and Spain. Includes only CC0 and CC-BY licensed records, with family-level counts for sampling-bias normalisation.
 
 ## Known limitations
 
