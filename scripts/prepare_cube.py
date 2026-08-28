@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 DATA_DIR = Path("data")
-CUBE_PATH = DATA_DIR / "0040444-260806074905277.csv"
+CUBE_PATH = DATA_DIR / "0041616-260806074905277.csv"
 SPECIES_LIST_PATH = DATA_DIR / "iberian_species.txt"
 OUTPUT_PATH = DATA_DIR / "cube_clean.parquet"
 MIN_YEAR = 1990
@@ -22,7 +22,7 @@ DTYPES = {
     "family": "category", "familykey": "category",
     "genus": "category", "genuskey": "category",
     "species": "category", "specieskey": "category",
-    "yearmonth": "category", "eeacellcode": "category",
+    "yearmonth": "category", "mgrscellcode": "category",
     "familycount": "int32", "occurrences": "int32",
     "mincoordinateuncertaintyinmeters": "float32",
 }
@@ -48,7 +48,7 @@ def main() -> None:
     print(df.dtypes)
     print(f"Rows: {len(df):,}")
     print(f"Distinct species: {df['species'].nunique():,}")
-    print(f"Distinct grid cells: {df['eeacellcode'].nunique():,}")
+    print(f"Distinct grid cells: {df['mgrscellcode'].nunique():,}")
     years = year_of(df["yearmonth"])
     print(f"Year range: {years.min()}-{years.max()}")
     print(f"Total occurrence count: {df['occurrences'].sum():,}")
@@ -74,7 +74,7 @@ def main() -> None:
     print("\n=== Final summary ===")
     print(f"Rows: {len(df):,}")
     print(f"Species: {df['species'].nunique():,}")
-    print(f"Cells: {df['eeacellcode'].nunique():,}")
+    print(f"Cells: {df['mgrscellcode'].nunique():,}")
     print(f"Size on disk: {OUTPUT_PATH.stat().st_size / 1e6:.1f} MB")
 
 

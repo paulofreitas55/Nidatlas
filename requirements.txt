@@ -1,3 +1,5 @@
+mgrs
 pandas
 pyarrow
 pybioclip
+pyproj
