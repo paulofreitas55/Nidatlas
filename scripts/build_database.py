@@ -57,6 +57,15 @@ CREATE TABLE species_cell (
     PRIMARY KEY (species_id, mgrs_cell)
 );
 
+CREATE TABLE species_cell_month (
+    species_id INTEGER NOT NULL REFERENCES species(id),
+    mgrs_cell TEXT NOT NULL REFERENCES grid_cells(mgrs_cell),
+    month INTEGER NOT NULL,
+    occurrences INTEGER NOT NULL,
+    family_occurrences INTEGER NOT NULL,
+    PRIMARY KEY (mgrs_cell, month, species_id)
+);
+
 CREATE TABLE species_month (
     species_id INTEGER NOT NULL REFERENCES species(id),
     month INTEGER NOT NULL,
@@ -137,7 +146,16 @@ def main() -> None:
     ).reset_index().rename(columns={"mgrscellcode": "mgrs_cell"})
 
     year_month = cube["yearmonth"].astype(str)
-    species_month_df = cube.assign(month=year_month.str.slice(5, 7).astype(int)).groupby(
+    cube = cube.assign(month=year_month.str.slice(5, 7).astype(int))
+
+    species_cell_month_df = cube.dropna(subset=["mgrscellcode"]).groupby(
+        ["species_id", "mgrscellcode", "month"], observed=True
+    ).agg(
+        occurrences=("occurrences", "sum"),
+        family_occurrences=("familycount", "sum"),
+    ).reset_index().rename(columns={"mgrscellcode": "mgrs_cell"})
+
+    species_month_df = cube.groupby(
         ["species_id", "month"], observed=True
     ).agg(occurrences=("occurrences", "sum")).reset_index()
 
@@ -155,12 +173,13 @@ def main() -> None:
     )
     grid_cells_df.to_sql("grid_cells", conn, if_exists="append", index=False)
     species_cell_df.to_sql("species_cell", conn, if_exists="append", index=False)
+    species_cell_month_df.to_sql("species_cell_month", conn, if_exists="append", index=False)
     species_month_df.to_sql("species_month", conn, if_exists="append", index=False)
     species_year_df.to_sql("species_year", conn, if_exists="append", index=False)
     conn.commit()
 
     print("=== Row counts ===")
-    for table in ["species", "grid_cells", "species_cell", "species_month", "species_year"]:
+    for table in ["species", "grid_cells", "species_cell", "species_cell_month", "species_month", "species_year"]:
         count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         print(f"{table}: {count:,}")
     conn.close()
