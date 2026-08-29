@@ -26,6 +26,38 @@ def _glob_prefix_pattern(mgrs_prefix: str) -> str:
     return mgrs_prefix + "*"
 
 
+def all_species(conn: sqlite3.Connection) -> list[dict]:
+    # Ordered by order/family/gbif_name so the frontend can group into
+    # sections just by walking the list, with no client-side sort needed.
+    # gbif_name is UNIQUE, so this sort key has no ties -- dex_number is a
+    # stable 1..584 sequence over that same deterministic order.
+    rows = conn.execute(
+        """
+        SELECT id, gbif_name, bioclip_name, family, "order", total_occurrences,
+               common_name_pt, common_name_es, common_name_en,
+               ROW_NUMBER() OVER (ORDER BY "order", family, gbif_name) AS dex_number
+        FROM species
+        ORDER BY "order", family, gbif_name
+        """
+    ).fetchall()
+    return [
+        {
+            "id": sid,
+            "gbif_name": gbif_name,
+            "bioclip_name": bioclip_name,
+            "family": family,
+            "order": order,
+            "total_occurrences": total_occurrences,
+            "common_name_pt": common_name_pt,
+            "common_name_es": common_name_es,
+            "common_name_en": common_name_en,
+            "dex_number": dex_number,
+        }
+        for sid, gbif_name, bioclip_name, family, order, total_occurrences,
+            common_name_pt, common_name_es, common_name_en, dex_number in rows
+    ]
+
+
 def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
     row = conn.execute(
         "SELECT id, gbif_name, bioclip_name, genus, family, \"order\", total_occurrences "
@@ -91,6 +123,42 @@ def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
         "monthly_profile": monthly_profile,
         "top_cells": top_cells,
     }
+
+
+def species_cells(conn: sqlite3.Connection, species_id: int, month: int | None = None) -> list[dict]:
+    exists = conn.execute("SELECT 1 FROM species WHERE id = ?", (species_id,)).fetchone()
+    if exists is None:
+        raise ValueError(f"no species with id {species_id}")
+
+    if month is None:
+        rows = conn.execute(
+            """
+            SELECT sc.mgrs_cell, gc.centroid_lat, gc.centroid_lon, sc.occurrences,
+                   CAST(sc.occurrences AS REAL) / sc.family_occurrences AS share
+            FROM species_cell sc
+            JOIN grid_cells gc ON gc.mgrs_cell = sc.mgrs_cell
+            WHERE sc.species_id = ?
+            ORDER BY sc.occurrences DESC
+            """,
+            (species_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT scm.mgrs_cell, gc.centroid_lat, gc.centroid_lon, scm.occurrences,
+                   CAST(scm.occurrences AS REAL) / scm.family_occurrences AS share
+            FROM species_cell_month scm
+            JOIN grid_cells gc ON gc.mgrs_cell = scm.mgrs_cell
+            WHERE scm.species_id = ? AND scm.month = ?
+            ORDER BY scm.occurrences DESC
+            """,
+            (species_id, month),
+        ).fetchall()
+
+    return [
+        {"mgrs_cell": cell, "centroid_lat": lat, "centroid_lon": lon, "occurrences": occ, "share": share}
+        for cell, lat, lon, occ, share in rows
+    ]
 
 
 def cell_summary(conn: sqlite3.Connection, mgrs_prefix: str) -> dict:
@@ -177,17 +245,34 @@ def _species_ranking_result(mgrs_prefix: str, cell_count: int, rows: list[tuple]
 
 
 def search_species(conn: sqlite3.Connection, text: str) -> list[dict]:
+    # NULL LIKE pattern evaluates to NULL (falsy), so species missing a
+    # vernacular name in a given language simply don't match on it -- no
+    # special-casing needed for the columns fetch_vernacular_names.py leaves NULL.
     pattern = "%" + _escape_like(text) + "%"
     rows = conn.execute(
         """
-        SELECT id, gbif_name, bioclip_name
+        SELECT id, gbif_name, bioclip_name, common_name_pt, common_name_es, common_name_en
         FROM species
-        WHERE gbif_name LIKE ? ESCAPE '\\' OR bioclip_name LIKE ? ESCAPE '\\'
+        WHERE gbif_name LIKE ? ESCAPE '\\'
+           OR bioclip_name LIKE ? ESCAPE '\\'
+           OR common_name_pt LIKE ? ESCAPE '\\'
+           OR common_name_es LIKE ? ESCAPE '\\'
+           OR common_name_en LIKE ? ESCAPE '\\'
         ORDER BY gbif_name
         """,
-        (pattern, pattern),
+        (pattern, pattern, pattern, pattern, pattern),
     ).fetchall()
-    return [{"id": sid, "gbif_name": g, "bioclip_name": b} for sid, g, b in rows]
+    return [
+        {
+            "id": sid,
+            "gbif_name": g,
+            "bioclip_name": b,
+            "common_name_pt": pt,
+            "common_name_es": es,
+            "common_name_en": en,
+        }
+        for sid, g, b, pt, es, en in rows
+    ]
 
 
 def _print_species_profile(profile: dict) -> None:

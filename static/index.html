@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nidario — Birds of the Iberian Peninsula</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark">Nidario</h1>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+      <input
+        type="search"
+        id="search-box"
+        class="search-box"
+        placeholder="Search species…"
+        aria-label="Search species by name"
+        autocomplete="off"
+      >
+    </div>
+    <nav id="quick-nav" class="quick-nav" aria-label="Jump to order"></nav>
+  </header>
+  <main>
+    <h2 class="page-title">Atlas</h2>
+    <p id="status" class="status" aria-live="polite">Loading species…</p>
+    <div id="species-list" class="species-list"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

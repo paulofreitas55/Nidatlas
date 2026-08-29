@@ -1,0 +1,576 @@
+{
+  "orders": {
+    "Accipitriformes": {
+      "pt": "Aves de rapina diurnas",
+      "es": "Aves rapaces diurnas",
+      "en": "Diurnal birds of prey"
+    },
+    "Anseriformes": {
+      "pt": "Patos, gansos e afins",
+      "es": "Patos, gansos y afines",
+      "en": "Ducks, geese and allies"
+    },
+    "Apodiformes": {
+      "pt": "Andorinhões",
+      "es": "Vencejos",
+      "en": "Swifts"
+    },
+    "Bucerotiformes": {
+      "pt": "Poupas",
+      "es": "Abubillas",
+      "en": "Hoopoes"
+    },
+    "Caprimulgiformes": {
+      "pt": "Noitibós",
+      "es": "Chotacabras",
+      "en": "Nightjars"
+    },
+    "Charadriiformes": {
+      "pt": "Aves limícolas, gaivotas e afins",
+      "es": "Limícolas, gaviotas y afines",
+      "en": "Shorebirds, gulls and allies"
+    },
+    "Ciconiiformes": {
+      "pt": "Cegonhas",
+      "es": "Cigüeñas",
+      "en": "Storks"
+    },
+    "Columbiformes": {
+      "pt": "Pombos e rolas",
+      "es": "Palomas y tórtolas",
+      "en": "Pigeons and doves"
+    },
+    "Coraciiformes": {
+      "pt": "Guarda-rios, abelharucos e afins",
+      "es": "Martines pescadores, abejarucos y afines",
+      "en": "Kingfishers, bee-eaters and allies"
+    },
+    "Cuculiformes": {
+      "pt": "Cucos",
+      "es": "Cucos",
+      "en": "Cuckoos"
+    },
+    "Falconiformes": {
+      "pt": "Falcões",
+      "es": "Halcones",
+      "en": "Falcons"
+    },
+    "Galliformes": {
+      "pt": "Galináceos",
+      "es": "Gallináceas",
+      "en": "Gamebirds"
+    },
+    "Gaviiformes": {
+      "pt": "Mobelhas",
+      "es": "Colimbos",
+      "en": "Loons"
+    },
+    "Gruiformes": {
+      "pt": "Grous, franco-galinhas e afins",
+      "es": "Grullas, rascones y afines",
+      "en": "Cranes, rails and allies"
+    },
+    "Otidiformes": {
+      "pt": "Abetardas",
+      "es": "Avutardas",
+      "en": "Bustards"
+    },
+    "Passeriformes": {
+      "pt": "Pássaros (aves canoras)",
+      "es": "Paseriformes (aves canoras)",
+      "en": "Perching birds (songbirds)"
+    },
+    "Pelecaniformes": {
+      "pt": "Pelicanos, garças e íbis",
+      "es": "Pelícanos, garzas e ibis",
+      "en": "Pelicans, herons and ibises"
+    },
+    "Phaethontiformes": {
+      "pt": "Rabos-de-junco",
+      "es": "Rabijuncos",
+      "en": "Tropicbirds"
+    },
+    "Phoenicopteriformes": {
+      "pt": "Flamingos",
+      "es": "Flamencos",
+      "en": "Flamingos"
+    },
+    "Piciformes": {
+      "pt": "Picas-paus",
+      "es": "Pájaros carpinteros",
+      "en": "Woodpeckers"
+    },
+    "Podicipediformes": {
+      "pt": "Mergulhões",
+      "es": "Zampullines",
+      "en": "Grebes"
+    },
+    "Procellariiformes": {
+      "pt": "Petréis e pardelas",
+      "es": "Petreles y pardelas",
+      "en": "Petrels and shearwaters"
+    },
+    "Psittaciformes": {
+      "pt": "Papagaios e periquitos",
+      "es": "Loros y periquitos",
+      "en": "Parrots and parakeets"
+    },
+    "Pterocliformes": {
+      "pt": "Cortiçóis",
+      "es": "Gangas",
+      "en": "Sandgrouse"
+    },
+    "Strigiformes": {
+      "pt": "Corujas e mochos",
+      "es": "Búhos y lechuzas",
+      "en": "Owls"
+    },
+    "Suliformes": {
+      "pt": "Alcatrazes, corvos-marinhos e afins",
+      "es": "Alcatraces, cormoranes y afines",
+      "en": "Gannets, cormorants and allies"
+    }
+  },
+  "families": {
+    "Accipitridae": {
+      "pt": "Águias, açores e abutres",
+      "es": "Águilas, azores y buitres",
+      "en": "Hawks, eagles and Old World vultures"
+    },
+    "Acrocephalidae": {
+      "pt": "Felosas-dos-juncos",
+      "es": "Carriceros",
+      "en": "Reed warblers"
+    },
+    "Aegithalidae": {
+      "pt": "Chapins-rabilongos",
+      "es": "Mitos",
+      "en": "Long-tailed tits"
+    },
+    "Alaudidae": {
+      "pt": "Cotovias",
+      "es": "Alondras",
+      "en": "Larks"
+    },
+    "Alcedinidae": {
+      "pt": "Guarda-rios",
+      "es": "Martines pescadores",
+      "en": "Kingfishers"
+    },
+    "Alcidae": {
+      "pt": "Alcas",
+      "es": "Álcidos",
+      "en": "Auks"
+    },
+    "Anatidae": {
+      "pt": "Patos, gansos e cisnes",
+      "es": "Patos, gansos y cisnes",
+      "en": "Ducks, geese and swans"
+    },
+    "Apodidae": {
+      "pt": "Andorinhões",
+      "es": "Vencejos",
+      "en": "Swifts"
+    },
+    "Ardeidae": {
+      "pt": "Garças e afins",
+      "es": "Garzas y afines",
+      "en": "Herons, egrets and bitterns"
+    },
+    "Bombycillidae": {
+      "pt": "Bicos-de-cera",
+      "es": "Ampelis",
+      "en": "Waxwings"
+    },
+    "Burhinidae": {
+      "pt": "Alcaravões",
+      "es": "Alcaravanes",
+      "en": "Thick-knees"
+    },
+    "Cacatuidae": {
+      "pt": "Catatuas",
+      "es": "Cacatúas",
+      "en": "Cockatoos"
+    },
+    "Calcariidae": {
+      "pt": "Escrevedeiras árticas",
+      "es": "Escribanos árticos",
+      "en": "Longspurs and snow buntings"
+    },
+    "Caprimulgidae": {
+      "pt": "Noitibós",
+      "es": "Chotacabras",
+      "en": "Nightjars"
+    },
+    "Cardinalidae": {
+      "pt": "Cardeais e afins",
+      "es": "Cardenales y afines",
+      "en": "Cardinals and allies"
+    },
+    "Certhiidae": {
+      "pt": "Trepadeiras",
+      "es": "Agateadores",
+      "en": "Treecreepers"
+    },
+    "Cettiidae": {
+      "pt": "Rouxinóis-bravos e afins",
+      "es": "Cetias y afines",
+      "en": "Bush warblers"
+    },
+    "Charadriidae": {
+      "pt": "Tarambolas e abibes",
+      "es": "Chorlitos y avefrías",
+      "en": "Plovers and lapwings"
+    },
+    "Ciconiidae": {
+      "pt": "Cegonhas",
+      "es": "Cigüeñas",
+      "en": "Storks"
+    },
+    "Cinclidae": {
+      "pt": "Melros-d'água",
+      "es": "Mirlos acuáticos",
+      "en": "Dippers"
+    },
+    "Cisticolidae": {
+      "pt": "Fuinhas",
+      "es": "Cisticoladas",
+      "en": "Cisticolas"
+    },
+    "Columbidae": {
+      "pt": "Pombos e rolas",
+      "es": "Palomas y tórtolas",
+      "en": "Pigeons and doves"
+    },
+    "Coraciidae": {
+      "pt": "Rolieiros",
+      "es": "Carracas",
+      "en": "Rollers"
+    },
+    "Corvidae": {
+      "pt": "Corvos, gaios e pegas",
+      "es": "Cuervos, arrendajos y urracas",
+      "en": "Crows, jays and magpies"
+    },
+    "Cuculidae": {
+      "pt": "Cucos",
+      "es": "Cucos",
+      "en": "Cuckoos"
+    },
+    "Emberizidae": {
+      "pt": "Escrevedeiras",
+      "es": "Escribanos",
+      "en": "Buntings"
+    },
+    "Estrildidae": {
+      "pt": "Bicos-de-lacre e afins",
+      "es": "Estrildidos",
+      "en": "Waxbills and munias"
+    },
+    "Falconidae": {
+      "pt": "Falcões",
+      "es": "Halcones",
+      "en": "Falcons"
+    },
+    "Fringillidae": {
+      "pt": "Tentilhões e afins",
+      "es": "Pinzones y afines",
+      "en": "Finches"
+    },
+    "Gaviidae": {
+      "pt": "Mobelhas",
+      "es": "Colimbos",
+      "en": "Loons"
+    },
+    "Glareolidae": {
+      "pt": "Perdizes-do-mar e corredores",
+      "es": "Canasteras y corredores",
+      "en": "Pratincoles and coursers"
+    },
+    "Gruidae": {
+      "pt": "Grous",
+      "es": "Grullas",
+      "en": "Cranes"
+    },
+    "Haematopodidae": {
+      "pt": "Ostraceiros",
+      "es": "Ostreros",
+      "en": "Oystercatchers"
+    },
+    "Hirundinidae": {
+      "pt": "Andorinhas",
+      "es": "Golondrinas",
+      "en": "Swallows and martins"
+    },
+    "Hydrobatidae": {
+      "pt": "Painhos",
+      "es": "Paíños",
+      "en": "Storm-petrels"
+    },
+    "Icteridae": {
+      "pt": "Icterídeos",
+      "es": "Ictéridos",
+      "en": "New World blackbirds"
+    },
+    "Laniidae": {
+      "pt": "Picanços",
+      "es": "Alcaudones",
+      "en": "Shrikes"
+    },
+    "Laridae": {
+      "pt": "Gaivotas e andorinhas-do-mar",
+      "es": "Gaviotas y charranes",
+      "en": "Gulls and terns"
+    },
+    "Leiothrichidae": {
+      "pt": "Zaragateiros e afins",
+      "es": "Leiotrícidos",
+      "en": "Babblers"
+    },
+    "Locustellidae": {
+      "pt": "Rouxinóis-grasnadores e afins",
+      "es": "Buscarlas",
+      "en": "Grassbirds"
+    },
+    "Malaconotidae": {
+      "pt": "Picanços-tropicais",
+      "es": "Bulubús y afines",
+      "en": "Bushshrikes"
+    },
+    "Meropidae": {
+      "pt": "Abelharucos",
+      "es": "Abejarucos",
+      "en": "Bee-eaters"
+    },
+    "Motacillidae": {
+      "pt": "Alvéolas e petinhas",
+      "es": "Lavanderas y bisbitas",
+      "en": "Wagtails and pipits"
+    },
+    "Muscicapidae": {
+      "pt": "Papa-moscas e afins",
+      "es": "Papamoscas y afines",
+      "en": "Old World flycatchers and chats"
+    },
+    "Numididae": {
+      "pt": "Galinhas-da-guiné",
+      "es": "Pintadas",
+      "en": "Guineafowl"
+    },
+    "Oceanitidae": {
+      "pt": "Painhos-australes",
+      "es": "Paíños australes",
+      "en": "Southern storm-petrels"
+    },
+    "Oriolidae": {
+      "pt": "Papa-figos",
+      "es": "Oropéndolas",
+      "en": "Old World orioles"
+    },
+    "Otididae": {
+      "pt": "Abetardas",
+      "es": "Avutardas",
+      "en": "Bustards"
+    },
+    "Pandionidae": {
+      "pt": "Águias-pesqueiras",
+      "es": "Águilas pescadoras",
+      "en": "Ospreys"
+    },
+    "Panuridae": {
+      "pt": "Chapins-bigodudos",
+      "es": "Bigotudos",
+      "en": "Bearded reedlings"
+    },
+    "Paridae": {
+      "pt": "Chapins",
+      "es": "Carboneros y herrerillos",
+      "en": "Tits and chickadees"
+    },
+    "Parulidae": {
+      "pt": "Mariquitas-americanas",
+      "es": "Reinitas",
+      "en": "New World warblers"
+    },
+    "Passerellidae": {
+      "pt": "Escrevedeiras-americanas",
+      "es": "Chingolos y afines",
+      "en": "New World sparrows"
+    },
+    "Passeridae": {
+      "pt": "Pardais",
+      "es": "Gorriones",
+      "en": "Old World sparrows"
+    },
+    "Pelecanidae": {
+      "pt": "Pelicanos",
+      "es": "Pelícanos",
+      "en": "Pelicans"
+    },
+    "Phaethontidae": {
+      "pt": "Rabos-de-junco",
+      "es": "Rabijuncos",
+      "en": "Tropicbirds"
+    },
+    "Phalacrocoracidae": {
+      "pt": "Corvos-marinhos",
+      "es": "Cormoranes",
+      "en": "Cormorants"
+    },
+    "Phasianidae": {
+      "pt": "Faisões, perdizes e codornizes",
+      "es": "Faisanes, perdices y codornices",
+      "en": "Pheasants, partridges and quail"
+    },
+    "Phoenicopteridae": {
+      "pt": "Flamingos",
+      "es": "Flamencos",
+      "en": "Flamingos"
+    },
+    "Phylloscopidae": {
+      "pt": "Felosas",
+      "es": "Mosquiteros",
+      "en": "Leaf warblers"
+    },
+    "Picidae": {
+      "pt": "Picas-paus",
+      "es": "Pájaros carpinteros",
+      "en": "Woodpeckers"
+    },
+    "Ploceidae": {
+      "pt": "Tecelões",
+      "es": "Tejedores",
+      "en": "Weavers"
+    },
+    "Podicipedidae": {
+      "pt": "Mergulhões",
+      "es": "Zampullines",
+      "en": "Grebes"
+    },
+    "Procellariidae": {
+      "pt": "Pardelas e petréis",
+      "es": "Pardelas y petreles",
+      "en": "Shearwaters and petrels"
+    },
+    "Prunellidae": {
+      "pt": "Ferreirinhas",
+      "es": "Acentores",
+      "en": "Accentors"
+    },
+    "Psittacidae": {
+      "pt": "Papagaios",
+      "es": "Loros",
+      "en": "Parrots"
+    },
+    "Psittaculidae": {
+      "pt": "Periquitos",
+      "es": "Periquitos",
+      "en": "Old World parakeets"
+    },
+    "Pteroclidae": {
+      "pt": "Cortiçóis",
+      "es": "Gangas",
+      "en": "Sandgrouse"
+    },
+    "Pycnonotidae": {
+      "pt": "Bulbuls",
+      "es": "Bulbules",
+      "en": "Bulbuls"
+    },
+    "Rallidae": {
+      "pt": "Franco-galinhas, frangos-d'água e galeirões",
+      "es": "Rascones, polluelas y fochas",
+      "en": "Rails, crakes and coots"
+    },
+    "Recurvirostridae": {
+      "pt": "Alfaiates e pernas-longas",
+      "es": "Avocetas y cigüeñuelas",
+      "en": "Avocets and stilts"
+    },
+    "Regulidae": {
+      "pt": "Estrelinhas",
+      "es": "Reyezuelos",
+      "en": "Kinglets and firecrests"
+    },
+    "Remizidae": {
+      "pt": "Chapins-penduleiros",
+      "es": "Pájaros moscones",
+      "en": "Penduline tits"
+    },
+    "Scolopacidae": {
+      "pt": "Maçaricos e narcejas",
+      "es": "Correlimos y agachadizas",
+      "en": "Sandpipers and snipes"
+    },
+    "Sittidae": {
+      "pt": "Trepadeiras-azuis",
+      "es": "Trepadores azules",
+      "en": "Nuthatches"
+    },
+    "Stercorariidae": {
+      "pt": "Moleiros",
+      "es": "Págalos",
+      "en": "Skuas and jaegers"
+    },
+    "Strigidae": {
+      "pt": "Corujas e mochos",
+      "es": "Búhos y mochuelos",
+      "en": "Typical owls"
+    },
+    "Sturnidae": {
+      "pt": "Estorninhos",
+      "es": "Estorninos",
+      "en": "Starlings"
+    },
+    "Sulidae": {
+      "pt": "Alcatrazes",
+      "es": "Alcatraces",
+      "en": "Gannets and boobies"
+    },
+    "Sylviidae": {
+      "pt": "Toutinegras",
+      "es": "Currucas",
+      "en": "Sylvia warblers"
+    },
+    "Threskiornithidae": {
+      "pt": "Íbis e colheireiros",
+      "es": "Ibis y espátulas",
+      "en": "Ibises and spoonbills"
+    },
+    "Tichodromidae": {
+      "pt": "Trepa-rochedos",
+      "es": "Treparriscos",
+      "en": "Wallcreepers"
+    },
+    "Troglodytidae": {
+      "pt": "Carriças",
+      "es": "Chochines",
+      "en": "Wrens"
+    },
+    "Turdidae": {
+      "pt": "Melros e tordos",
+      "es": "Mirlos y zorzales",
+      "en": "Thrushes"
+    },
+    "Tytonidae": {
+      "pt": "Corujas-das-torres",
+      "es": "Lechuzas",
+      "en": "Barn owls"
+    },
+    "Upupidae": {
+      "pt": "Poupas",
+      "es": "Abubillas",
+      "en": "Hoopoes"
+    },
+    "Viduidae": {
+      "pt": "Viúvas",
+      "es": "Viudas",
+      "en": "Indigobirds and whydahs"
+    },
+    "Vireonidae": {
+      "pt": "Vireões",
+      "es": "Vireos",
+      "en": "Vireos"
+    }
+  }
+}

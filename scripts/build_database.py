@@ -40,7 +40,11 @@ CREATE TABLE species (
     genus TEXT NOT NULL,
     family TEXT NOT NULL,
     "order" TEXT NOT NULL,
-    total_occurrences INTEGER NOT NULL
+    total_occurrences INTEGER NOT NULL,
+    -- Populated later by scripts/fetch_vernacular_names.py, not by this script.
+    common_name_pt TEXT,
+    common_name_es TEXT,
+    common_name_en TEXT
 );
 
 CREATE TABLE grid_cells (

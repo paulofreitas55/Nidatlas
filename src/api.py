@@ -7,6 +7,7 @@ from collections.abc import Generator
 import queries
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Path, Query
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Nidario API")
 
@@ -39,6 +40,11 @@ def api_search_species(
     return queries.search_species(conn, q)
 
 
+@app.get("/api/species/all")
+def api_all_species(conn: sqlite3.Connection = Depends(get_db)) -> list[dict]:
+    return queries.all_species(conn)
+
+
 @app.get("/api/species/{species_id}")
 def api_species_profile(
     species_id: int,
@@ -46,6 +52,18 @@ def api_species_profile(
 ) -> dict:
     try:
         return queries.species_profile(conn, species_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
+
+
+@app.get("/api/species/{species_id}/cells")
+def api_species_cells(
+    species_id: int,
+    month: int | None = Query(None, ge=1, le=12),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> list[dict]:
+    try:
+        return queries.species_cells(conn, species_id, month)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
 
@@ -65,6 +83,12 @@ def api_cell_monthly(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     return queries.cell_monthly(conn, mgrs_prefix, month)
+
+
+# Mounted last and at "/" so it only catches paths no /api/* route above
+# already matched -- Starlette tries routes in registration order, and a
+# Mount at "/" would otherwise shadow everything if it came first.
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 if __name__ == "__main__":
