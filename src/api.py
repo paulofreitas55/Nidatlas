@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+"""FastAPI web layer over the query functions in queries.py."""
+
+import sqlite3
+from collections.abc import Generator
+
+import queries
+import uvicorn
+from fastapi import Depends, FastAPI, HTTPException, Path, Query
+
+app = FastAPI(title="Nidario API")
+
+
+def get_db() -> Generator[sqlite3.Connection, None, None]:
+    # One connection per request, opened read-only (mode=ro) so the public API
+    # can never write to the database no matter what a handler does with it --
+    # even a bug or a future endpoint can't corrupt data/nidario.db. The
+    # generator + try/finally is FastAPI's documented pattern for a dependency
+    # that owns a resource: it guarantees conn.close() runs after the request,
+    # including when the handler raises.
+    uri = queries.DB_PATH.resolve().as_uri() + "?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/api/species")
+def api_search_species(
+    q: str = Query(..., min_length=1),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> list[dict]:
+    return queries.search_species(conn, q)
+
+
+@app.get("/api/species/{species_id}")
+def api_species_profile(
+    species_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    try:
+        return queries.species_profile(conn, species_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
+
+
+@app.get("/api/zones/{mgrs_prefix}")
+def api_cell_summary(
+    mgrs_prefix: str = Path(..., pattern=queries.MGRS_PREFIX_RE.pattern),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    return queries.cell_summary(conn, mgrs_prefix)
+
+
+@app.get("/api/zones/{mgrs_prefix}/month/{month}")
+def api_cell_monthly(
+    mgrs_prefix: str = Path(..., pattern=queries.MGRS_PREFIX_RE.pattern),
+    month: int = Path(..., ge=1, le=12),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    return queries.cell_monthly(conn, mgrs_prefix, month)
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)

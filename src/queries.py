@@ -7,7 +7,7 @@ from pathlib import Path
 
 DB_PATH = Path("data") / "nidario.db"
 
-_MGRS_PREFIX_RE = re.compile(r"^[0-9A-Z]*$")
+MGRS_PREFIX_RE = re.compile(r"^[0-9A-Z]*$")
 
 
 def _escape_like(text: str) -> str:
@@ -21,7 +21,7 @@ def _glob_prefix_pattern(mgrs_prefix: str) -> str:
     # full index scan. GLOB is always case-sensitive, which is exactly right
     # here since MGRS cell codes are always uppercase, and has no escape
     # syntax, so the prefix is restricted to MGRS's own alphabet instead.
-    if not _MGRS_PREFIX_RE.match(mgrs_prefix):
+    if not MGRS_PREFIX_RE.match(mgrs_prefix):
         raise ValueError(f"invalid mgrs_prefix: {mgrs_prefix!r} (expected digits/uppercase letters)")
     return mgrs_prefix + "*"
 

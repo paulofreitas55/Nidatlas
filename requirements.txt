@@ -1,5 +1,9 @@
+fastapi
+httpx
 mgrs
 pandas
 pyarrow
 pybioclip
+pytest
 pyproj
+uvicorn[standard]
