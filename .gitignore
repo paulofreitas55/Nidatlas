@@ -8,3 +8,10 @@ __pycache__/
 data/*
 *.parquet
 *.csv
+
+# Small, hand-curated decision files (not bulk build artifacts) -- kept in
+# git so a fresh clone can reproduce the exact same name resolution instead
+# of re-deriving these human decisions from scratch. See CLAUDE.md.
+!data/taxonomy_synonyms.csv
+!data/ott_taxonomy_synonyms.csv
+!data/ott_ambiguous_resolutions.csv

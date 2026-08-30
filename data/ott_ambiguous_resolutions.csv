@@ -1,0 +1,5 @@
+gbif_name,ott_id,note
+Emberiza rustica,7068450,"Exact non-synonym match (score 1.0) but flagged ""hidden"" in OToL's taxonomy -- other candidates (Schoeniclus rusticus, Emberiza rutila) were weaker fuzzy matches. May still be absent from the synthetic tree like the other hidden/unsampled taxa; verified per-species at fetch time, not assumed."
+Muscicapa striata,116518,"Exact non-synonym match. The only other candidate (Setophaga striata, an unrelated New World warbler) surfaced solely because ""Muscicapa striata"" appears in its synonym list."
+Phoenicopterus roseus,595567,"Exact non-synonym match (Old World Greater Flamingo, matches gbif_name exactly). The only other candidate (Phoenicopterus ruber) is a synonym from when the two were historically lumped as one species."
+Microcarbo pygmaeus,1080666,"Chosen as Microcarbo pygmeus (note spelling: pygmeus, not pygmaeus) -- current genus placement per most modern authorities, over the older Phalacrocorax pygmaeus placement. Both candidates were synonym-only entries with no exact non-synonym match to break the tie mechanically."

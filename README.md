@@ -115,5 +115,14 @@ coastline the map actually draws). See [CLAUDE.md](CLAUDE.md) for why.
 - **`Ardea brachyrhyncha` excluded.** No BioCLIP-recognized equivalent could be resolved for this species, confidently or otherwise, so it is dropped from `data/iberian_species.txt` rather than mapped to a guess.
 - **The 50-occurrence threshold is a tunable product decision, not a fixed rule.** `scripts/build_species_list.py --min-occurrences` defaults to 50 to exclude vagrants and data noise, but this cutoff was chosen as a reasonable starting point, not derived from any formal analysis — revisit it as the atlas's species coverage needs evolve.
 - **Grid choice: EEA reference grid replaced with MGRS.** The initial occurrence cube used the EEA reference grid (ETRS89-based, continental Europe coverage), which fails to assign a cell to most records from the Macaronesian islands (Azores, Madeira, Canaries) — leaving island endemics like `Regulus madeirensis` and `Pyrrhula murina` without any spatial data at all. The cube was regenerated using the MGRS 10km grid, which has global coverage, including pelagic records.
+- **7 species have no placement in the phylogenetic tree.** All 584 species resolve to a valid Open Tree of Life taxon (`scripts/fetch_phylogeny.py`), but 7 of those taxa aren't sampled by any input phylogeny in synthesis `opentree16.1`, so they have no tip in `phylo_nodes`. Six are folded into an ancestor placeholder node by the `induced_subtree` endpoint itself:
+  - `Calandrella brachydactyla`
+  - `Himantopus himantopus`
+  - `Oenanthe hispanica`
+  - `Porphyrio porphyrio`
+  - `Spatula cyanoptera` (matched as `Anas cyanoptera`)
+  - `Tyto alba`
+
+  The seventh, `Emberiza rustica`, is more severe: its exact taxon match is flagged `"hidden"` in Open Tree's own taxonomy, so `induced_subtree` refuses the id outright rather than folding it into a placeholder. `src/queries.py`'s phylogeny functions treat all 7 as a valid "no tree placement" outcome (empty relatives list, not a 404), never a guessed-at position. See `scripts/fetch_phylogeny.py`'s own report for the up-to-date list if the resolution is ever rerun.
 - **No caching in production terms.** The API currently sends `Cache-Control: no-store` on every response, a deliberate dev-convenience choice (see `src/api.py`) that should be revisited before any real deployment.
 - **Not yet deployed anywhere.** Everything above runs locally only — there is no Docker image, CI pipeline, or hosting target configured yet.
