@@ -187,6 +187,14 @@ main {
 .order-group {
   margin-top: 1.5rem;
   border-bottom: 1px solid var(--line);
+  /* Quick-nav jumps land here via scrollIntoView, which would otherwise put
+     the section flush against the real viewport top -- underneath the
+     sticky header, which visually occupies that space regardless. --header-h
+     is measured live in app.js (not a guessed constant): the header's own
+     height genuinely varies by viewport width (row vs. wrapped-column
+     layout) and content (quick-nav can wrap), so no single CSS value stays
+     correct across breakpoints. The 12px is just breathing room. */
+  scroll-margin-top: calc(var(--header-h, 0px) + 12px);
 }
 
 .order-header {
@@ -305,6 +313,17 @@ main {
   font-family: var(--font-sans);
   font-size: 0.76rem;
   color: var(--muted);
+}
+
+/* Shown only when a search result matched on a vernacular name in a
+   language other than the one currently displayed (see matchInfo in
+   app.js) -- explains why the card appeared, distinct from .card-common
+   (italic + accent, not the plain muted tone the always-shown name uses). */
+.card-match-tag {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--accent);
 }
 
 /* Footer */

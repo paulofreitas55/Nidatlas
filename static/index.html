@@ -11,7 +11,7 @@
     <div class="header-row">
       <div class="brand-row">
         <h1 class="wordmark">Nidario</h1>
-        <div class="lang-switch" role="group" aria-label="Language">
+        <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
           <button type="button" class="lang-btn" data-lang="pt">PT</button>
           <button type="button" class="lang-btn" data-lang="es">ES</button>
           <button type="button" class="lang-btn" data-lang="en">EN</button>
@@ -21,21 +21,22 @@
         type="search"
         id="search-box"
         class="search-box"
-        placeholder="Search species…"
-        aria-label="Search species by name"
+        data-i18n-placeholder="common.search_placeholder"
+        data-i18n-aria-label="common.search_aria"
         autocomplete="off"
       >
     </div>
-    <nav id="quick-nav" class="quick-nav" aria-label="Jump to order"></nav>
+    <nav id="quick-nav" class="quick-nav" data-i18n-aria-label="nav.jump_to_order_aria"></nav>
   </header>
   <main>
-    <h2 class="page-title">Atlas</h2>
-    <p id="status" class="status" aria-live="polite">Loading species…</p>
+    <h2 class="page-title" data-i18n="atlas.page_title">Atlas</h2>
+    <p id="status" class="status" aria-live="polite" data-i18n="common.loading_species">Loading species…</p>
     <div id="species-list" class="species-list"></div>
   </main>
 
   <footer class="site-footer">
-    <p>Occurrence data &copy; <a href="https://www.gbif.org">GBIF.org</a>.</p>
+    <p id="footer-data-line"></p>
+    <p id="footer-attribution-line"></p>
   </footer>
 
   <script src="lang.js"></script>

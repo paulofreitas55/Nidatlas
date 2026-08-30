@@ -20,6 +20,8 @@ pip install -r requirements.txt
 
 ## Data sources
 
+Full provenance, licences and required attributions for every external dataset, model and library this project depends on are tracked in [ATTRIBUTIONS.md](ATTRIBUTIONS.md). Summary of the two GBIF downloads:
+
 **Species list.** GBIF.org (27 August 2026) GBIF Occurrence Download https://doi.org/10.15468/dl.sddbky
 
 Covers bird species of Portugal and Spain. Includes only CC0 and CC-BY licensed records.
@@ -28,7 +30,7 @@ Covers bird species of Portugal and Spain. Includes only CC0 and CC-BY licensed 
 
 Species × year-month × MGRS 10km grid, for birds of Portugal and Spain. Includes only CC0 and CC-BY licensed records, with family-level counts for sampling-bias normalisation.
 
-**Country boundaries.** Natural Earth, [1:10m Cultural Vectors — Admin 0 Countries](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/), public domain. `static/iberia.geojson` is the Portugal and Spain features filtered from `ne_10m_admin_0_countries.geojson` (via the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror), trimmed to just `name`/`iso_a2` properties. Each country's geometry is a MultiPolygon that already includes its island territories (Azores and Madeira within Portugal; the Balearic and Canary Islands within Spain) — no separate island file needed. Originally sourced at 1:50m, which silently dropped several small islands (Porto Santo, Corvo, Graciosa); moved to 1:10m to recover them. Three uninhabited micro-islands (the Desertas and Selvagens reserves off Madeira, and La Graciosa in the Canaries) are still missing — they're absent from Natural Earth's admin-0 layer even at 10m and from its dedicated minor-islands layer, so recovering them would need a different source (e.g. OpenStreetMap coastline data).
+**Country boundaries.** `static/iberia.geojson` is built in two stages. `scripts/build_land_polygons.py` clips OpenStreetMap's [land-polygons](https://osmdata.openstreetmap.de/data/land-polygons.html) dataset (coastline-derived, ODbL 1.0, © OpenStreetMap contributors) to the study bounding box. This replaced two earlier Natural Earth-based attempts (1:50m, then 1:10m admin-0 boundaries) that kept silently dropping small islands — Porto Santo, Corvo, Graciosa, and, even at 1:10m, the uninhabited Desertas, Selvagens and La Graciosa (Canaries) reserves — since OSM's land polygons are coastline-derived rather than country-bounded, so they include every islet regardless of habitation status. But that same property means the bbox-clipped output also fuses mainland Iberia into France, Andorra and a sliver of Morocco/Western Sahara, since OSM doesn't split land by country. `scripts/clip_land_to_countries.py` removes that: it intersects the OSM land against Natural Earth's admin-0 Portugal + Spain polygons (public domain, used purely as a clip mask) and re-simplifies the result, keeping OSM's fine coastline detail (e.g. the Galician rias) everywhere except the new inland France/Andorra edge. Final size: 0.49MB / 19,321 vertices, down from 1.65MB / 68,557 for the bbox-only version. See ATTRIBUTIONS.md for the full licence terms.
 
 ## Known limitations
 

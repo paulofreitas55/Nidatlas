@@ -228,24 +228,71 @@
   border-color: var(--green);
 }
 
-.map {
+.region-btn.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--paper);
+}
+
+/* Archipelagos are rendered as multiple side-by-side panels (island groups
+   are too far apart to share one sane frame) -- mainland is just a
+   single-panel "region" so it reuses the exact same layout, not a special
+   case. Row on wide screens, column on narrow ones (region-selector /
+   month-filter's own breakpoint below matches). */
+.map-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.map-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1 1 0%;
+  min-width: 0; /* let flex children shrink below their content size */
+}
+
+.map-panel-label {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.map-panel {
   width: 100%;
-  height: 60vh;
-  min-height: 320px;
+  height: 45vh;
+  min-height: 240px;
   border: 1px solid var(--line);
   border-radius: 6px;
 }
 
-/* #map, not .map: leaflet.css loads after species.css and its own
-   .leaflet-container rule sets a default grey background at the same
-   specificity, so a plain .map background rule loses the cascade and never
-   shows. The id selector wins regardless of link order. Muted blue-grey
-   "sea" -- land is the light paper tone (LAND_FILL in species.js, a literal
-   color string since Leaflet needs one there, not a CSS var), so land vs.
-   sea now reads as a real, unambiguous distinction, not two shades of the
-   same paper hue. */
-#map.leaflet-container {
+/* .map-panel, not a bare class: leaflet.css loads after species.css and its
+   own .leaflet-container rule sets a default grey background at the same
+   specificity, so a plain .map-panel background rule loses the cascade and
+   never shows without the compound selector raising specificity. Muted
+   blue-grey "sea" -- land is the light paper tone (LAND_FILL in species.js,
+   a literal color string since Leaflet needs one there, not a CSS var), so
+   land vs. sea now reads as a real, unambiguous distinction, not two shades
+   of the same paper hue. */
+.map-panel.leaflet-container {
   background: #c2cdd2;
+}
+
+@media (min-width: 640px) {
+  .map-panels {
+    flex-direction: row;
+    align-items: stretch;
+    height: 60vh;
+    min-height: 320px;
+  }
+
+  .map-panel {
+    height: 100%;
+  }
 }
 
 .map-legend {

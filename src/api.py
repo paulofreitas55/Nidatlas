@@ -7,9 +7,15 @@ from collections.abc import Generator
 import queries
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Path, Query
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Nidario API")
+# static/iberia.geojson and the cell-list endpoints are JSON/geometry --
+# exactly the content type gzip compresses best (typically 80-90% smaller
+# in transfer size), so this cuts real load time on top of the vertex-count
+# reduction already done in the file itself.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def get_db() -> Generator[sqlite3.Connection, None, None]:

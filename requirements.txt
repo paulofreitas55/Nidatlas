@@ -4,6 +4,8 @@ mgrs
 pandas
 pyarrow
 pybioclip
+pyshp
 pytest
 pyproj
+shapely
 uvicorn[standard]

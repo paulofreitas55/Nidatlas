@@ -1,0 +1,119 @@
+{
+  "common.lang_switch_aria": { "en": "Language", "pt": "Idioma", "es": "Idioma" },
+  "common.search_placeholder": { "en": "Search species…", "pt": "Pesquisar espécies…", "es": "Buscar especies…" },
+  "common.search_aria": { "en": "Search species by name", "pt": "Pesquisar espécies por nome", "es": "Buscar especies por nombre" },
+  "common.loading_species": { "en": "Loading species…", "pt": "A carregar espécies…", "es": "Cargando especies…" },
+
+  "footer.snapshot_date": { "en": "28 August 2026", "pt": "28 de agosto de 2026", "es": "28 de agosto de 2026" },
+  "footer.data_line": {
+    "en": "Occurrence data: GBIF.org, {date} snapshot — CC0 and CC-BY licensed records only.",
+    "pt": "Dados de ocorrência: GBIF.org, captura de {date} — apenas registos licenciados CC0 e CC-BY.",
+    "es": "Datos de ocurrencia: GBIF.org, instantánea de {date} — solo registros con licencia CC0 y CC-BY."
+  },
+  "footer.attribution_line": {
+    "en": "Map data © {osm} contributors, {odbl}. Species identification: {bioclip} ({imageomics}).",
+    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}).",
+    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics})."
+  },
+
+  "nav.jump_to_order_aria": { "en": "Jump to order", "pt": "Ir para a ordem", "es": "Ir al orden" },
+  "nav.jump_to_region_aria": { "en": "Jump to region", "pt": "Ir para a região", "es": "Ir a la región" },
+  "nav.filter_by_month_aria": { "en": "Filter by month", "pt": "Filtrar por mês", "es": "Filtrar por mes" },
+  "nav.back_to_atlas": { "en": "← Back to Atlas", "pt": "← Voltar ao Atlas", "es": "← Volver al Atlas" },
+
+  "page.index_title": {
+    "en": "Nidario — Birds of the Iberian Peninsula",
+    "pt": "Nidario — Aves da Península Ibérica",
+    "es": "Nidario — Aves de la Península Ibérica"
+  },
+  "page.species_fallback_title": { "en": "Species — Nidario", "pt": "Espécie — Nidario", "es": "Especie — Nidario" },
+
+  "atlas.page_title": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
+  "atlas.no_match": {
+    "en": "No species match your search.",
+    "pt": "Nenhuma espécie corresponde à sua pesquisa.",
+    "es": "Ninguna especie coincide con su búsqueda."
+  },
+  "atlas.status_all_one": { "en": "{count} species", "pt": "{count} espécie", "es": "{count} especie" },
+  "atlas.status_all_other": { "en": "{count} species", "pt": "{count} espécies", "es": "{count} especies" },
+  "atlas.status_filtered_one": {
+    "en": "{count} of {total} species",
+    "pt": "{count} de {total} espécies",
+    "es": "{count} de {total} especies"
+  },
+  "atlas.status_filtered_other": {
+    "en": "{count} of {total} species",
+    "pt": "{count} de {total} espécies",
+    "es": "{count} de {total} especies"
+  },
+  "atlas.match_tag": { "en": "{name} ({lang})", "pt": "{name} ({lang})", "es": "{name} ({lang})" },
+
+  "species.error_no_id": { "en": "No species specified.", "pt": "Nenhuma espécie especificada.", "es": "No se especificó ninguna especie." },
+  "species.error_not_found": { "en": "Species not found.", "pt": "Espécie não encontrada.", "es": "Especie no encontrada." },
+  "species.error_load": { "en": "Could not load species.", "pt": "Não foi possível carregar a espécie.", "es": "No se pudo cargar la especie." },
+  "species.total_records_label": { "en": "Total records", "pt": "Total de registos", "es": "Total de registros" },
+  "species.global_rank_label": { "en": "Global rank", "pt": "Classificação global", "es": "Clasificación global" },
+  "species.global_rank_value": { "en": "{rank} of {total}", "pt": "{rank} de {total}", "es": "{rank} de {total}" },
+  "species.commonness": {
+    "en": "More common than {percent}% of atlas species",
+    "pt": "Mais comum do que {percent}% das espécies do atlas",
+    "es": "Más común que el {percent}% de las especies del atlas"
+  },
+  "species.seasonality_title": { "en": "Seasonality", "pt": "Sazonalidade", "es": "Estacionalidad" },
+  "species.seasonality_chart_aria": {
+    "en": "Monthly seasonality chart",
+    "pt": "Gráfico de sazonalidade mensal",
+    "es": "Gráfico de estacionalidad mensual"
+  },
+  "species.distribution_title": { "en": "Distribution", "pt": "Distribuição", "es": "Distribución" },
+  "species.month_all": { "en": "All", "pt": "Todos", "es": "Todos" },
+
+  "map.loading": { "en": "Loading…", "pt": "A carregar…", "es": "Cargando…" },
+  "map.no_records": {
+    "en": "No records for this period.",
+    "pt": "Sem registos para este período.",
+    "es": "Sin registros para este período."
+  },
+  "map.error_load": {
+    "en": "Could not load distribution data.",
+    "pt": "Não foi possível carregar os dados de distribuição.",
+    "es": "No se pudieron cargar los datos de distribución."
+  },
+  "map.cell_count_one": { "en": "{count} cell", "pt": "{count} célula", "es": "{count} celda" },
+  "map.cell_count_other": { "en": "{count} cells", "pt": "{count} células", "es": "{count} celdas" },
+  "map.popup_records_one": { "en": "{count} record", "pt": "{count} registo", "es": "{count} registro" },
+  "map.popup_records_other": { "en": "{count} records", "pt": "{count} registos", "es": "{count} registros" },
+  "map.popup_view_gbif": { "en": "View on GBIF →", "pt": "Ver no GBIF →", "es": "Ver en GBIF →" },
+
+  "region.mainland": { "en": "Mainland", "pt": "Continente", "es": "Península" },
+  "region.azores": { "en": "Azores", "pt": "Açores", "es": "Azores" },
+  "region.azores_west_panel": {
+    "en": "Western (Flores, Corvo)",
+    "pt": "Ocidental (Flores, Corvo)",
+    "es": "Occidental (Flores, Corvo)"
+  },
+  "region.azores_central_panel": {
+    "en": "Central (Faial, Pico, São Jorge, Graciosa, Terceira)",
+    "pt": "Central (Faial, Pico, São Jorge, Graciosa, Terceira)",
+    "es": "Central (Faial, Pico, São Jorge, Graciosa, Terceira)"
+  },
+  "region.azores_east_panel": {
+    "en": "Eastern (São Miguel, Santa Maria)",
+    "pt": "Oriental (São Miguel, Santa Maria)",
+    "es": "Oriental (São Miguel, Santa Maria)"
+  },
+  "region.madeira": { "en": "Madeira", "pt": "Madeira", "es": "Madeira" },
+  "region.madeira_selvagens_panel": { "en": "Selvagens", "pt": "Selvagens", "es": "Selvagens" },
+  "region.canaries": { "en": "Canaries", "pt": "Canárias", "es": "Canarias" },
+  "region.canaries_panel": {
+    "en": "Canaries (Tenerife, Gran Canaria, La Palma, La Gomera, El Hierro, Lanzarote, Fuerteventura)",
+    "pt": "Canárias (Tenerife, Gran Canaria, La Palma, La Gomera, El Hierro, Lanzarote, Fuerteventura)",
+    "es": "Canarias (Tenerife, Gran Canaria, La Palma, La Gomera, El Hierro, Lanzarote, Fuerteventura)"
+  },
+  "region.balearics": { "en": "Balearics", "pt": "Baleares", "es": "Baleares" },
+  "region.balearics_panel": {
+    "en": "Balearics (Mallorca, Menorca, Ibiza, Formentera)",
+    "pt": "Baleares (Mallorca, Menorca, Ibiza, Formentera)",
+    "es": "Baleares (Mallorca, Menorca, Ibiza, Formentera)"
+  }
+}
