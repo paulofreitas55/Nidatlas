@@ -33,10 +33,12 @@ FALLBACK_REGION = {
     "source_nuts_id": None,
 }
 
-# NUTS3 at 1:3,000,000 is far coarser than the OSM coastline the map itself
-# uses, so a real coastal cell's centroid can legitimately fall just outside
-# the simplified region polygon even though the cell is obviously part of
-# that region. Diagnosed before choosing this value (see the chat history /
+# NUTS3 at 1:1,000,000 (the finest scale GISCO publishes -- see
+# scripts/build_regions.py's module docstring) is still far coarser than the
+# OSM coastline the map itself uses, so a real coastal cell's centroid can
+# legitimately fall just outside the simplified region polygon even though
+# the cell is obviously part of that region. Diagnosed before choosing this
+# value (see the chat history /
 # commit message for the full breakdown): of the cells with no containing
 # polygon, 93% of their combined occurrences sat within 5km of the nearest
 # region, and 98.4% within 15km -- a steep, natural cliff, not a smooth

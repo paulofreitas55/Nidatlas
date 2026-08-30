@@ -230,17 +230,32 @@ called by anything else in the repo.
   15km are genuinely pelagic seabirds. Don't change this threshold without
   redoing that same diagnostic; it's not an arbitrary round number.
 - **Island region shapes come from OSM (`iberia.geojson`), not GISCO.**
-  Related to the point above but a separate fix: GISCO's NUTS polygons,
-  even at their finest published scale (1:1,000,000), drew small islands
-  50-85% over open water relative to the true coastline (measured
-  directly — Desertas overlapped real land only 15-31% depending on GISCO
-  scale). `build_regions.py` now sources every island-kind region's
-  *rendered shape* from the precise OSM-derived land layer instead,
+  Related to the point above but a separate fix: even at GISCO's finest
+  published NUTS3 scale (1:1,000,000), its own polygons overlap real land
+  by only 31% of Desertas' own area and 56% of Selvagens' (measured
+  directly by intersecting GISCO's polygon for each island against the
+  OSM-derived land layer already used for this app's basemap — see
+  `scripts/build_regions.py`'s module docstring for the full breakdown,
+  including the even coarser 1:3,000,000 GISCO product this project used
+  before upgrading to 01M). `build_regions.py` now sources every
+  island-kind region's *rendered shape* from the precise OSM-derived land
+  layer instead,
   matched to the correct named region via the same nearest-reference-point
   logic previously used only to decompose GISCO's own geometry. GISCO is
   still authoritative for mainland district shapes (only GISCO has the
   internal administrative boundary lines between neighbouring districts —
   there's no OSM equivalent to swap in there).
+- **Schema duplication between `build_database.py` and
+  `assign_regions.py`.** `build_database.py`'s `SCHEMA` string is the
+  canonical definition of every table, but `assign_regions.py` carries its
+  own second copy of the `regions` table definition plus the
+  `grid_cells.region_id`/`region_name` columns (`ensure_schema()`, using
+  `CREATE TABLE IF NOT EXISTS`/`ALTER TABLE ... ADD COLUMN`) so it stays
+  safely re-runnable against a database that already has data, without
+  requiring a full rebuild first. Nothing enforces these two definitions
+  agree — if you change either table's shape in `build_database.py`, you
+  must update `ensure_schema()` in `assign_regions.py` to match by hand, or
+  the two will silently drift apart.
 
 ## Conventions
 

@@ -4,9 +4,6 @@ A web atlas of the birds of the Iberian Peninsula — Portugal and Spain,
 including the Azores, Madeira, the Canary Islands and the Balearics — built
 on public GBIF occurrence data.
 
-![Nidatlas region map screenshot](docs/screenshot.png)
-*Screenshot placeholder — the region choropleth map, `/`.*
-
 ## What it does
 
 - **Region map** (the landing page) — every district, province and named
