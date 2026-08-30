@@ -1,3 +1,4 @@
+import concurrent.futures
 import sqlite3
 import sys
 from pathlib import Path
@@ -124,3 +125,37 @@ def test_search_finds_species_by_spanish_name(client: TestClient) -> None:
     assert response.status_code == 200
     results = response.json()
     assert any(r["gbif_name"] == "Turdus merula" for r in results)
+
+
+def test_species_profile_includes_dex_number_and_vernacular_names(client: TestClient) -> None:
+    response = client.get("/api/species/566")
+    assert response.status_code == 200
+    profile = response.json()
+    assert profile["gbif_name"] == "Turdus merula"
+    assert 1 <= profile["dex_number"] <= 584
+    for key in ("common_name_pt", "common_name_es", "common_name_en"):
+        assert key in profile
+    assert profile["global_rank"]["total"] == 584
+
+    # dex_number must match all_species()'s numbering for the same species --
+    # one source of truth (ROW_NUMBER over order/family/gbif_name), not two
+    # independently-computed sequences that could drift apart.
+    all_species = client.get("/api/species/all").json()
+    matching = next(s for s in all_species if s["id"] == 566)
+    assert matching["dex_number"] == profile["dex_number"]
+
+
+def test_concurrent_requests_do_not_break_the_db_connection(client: TestClient) -> None:
+    # Regression test: get_db() used to open sqlite3 without check_same_thread=False.
+    # FastAPI runs a sync generator dependency's setup and teardown as separate
+    # threadpool calls, which can land on different worker threads under real
+    # concurrent load even though a single request never uses the connection
+    # from two threads at once -- sqlite3's same-thread check rejected that.
+    # Sequential requests (the rest of this test file) never exercised this.
+    def hit(_: int) -> int:
+        return client.get("/api/species/566").status_code
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(hit, range(30)))
+
+    assert results == [200] * 30

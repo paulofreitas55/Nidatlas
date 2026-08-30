@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Species — Nidario</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="species.css">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
+    crossorigin=""
+  >
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark"><a href="index.html">Nidario</a></h1>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+      <a class="back-link" href="index.html">&larr; Back to Atlas</a>
+    </div>
+  </header>
+
+  <main id="species-main" class="species-main">
+    <p id="load-status" class="status" aria-live="polite">Loading species…</p>
+
+    <section id="identity" class="identity" hidden>
+      <span class="thumb-placeholder"></span>
+      <div class="identity-text">
+        <span id="dex-number" class="dex-number"></span>
+        <h1 id="species-name" class="species-name"></h1>
+        <p id="species-vernacular" class="species-vernacular"></p>
+        <p id="species-taxon" class="species-taxon"></p>
+      </div>
+    </section>
+
+    <section id="key-figures" class="key-figures" hidden>
+      <div class="figure">
+        <span id="total-records" class="figure-value"></span>
+        <span class="figure-label">Total records</span>
+      </div>
+      <div class="figure">
+        <span id="global-rank" class="figure-value"></span>
+        <span class="figure-label">Global rank</span>
+      </div>
+      <p id="commonness" class="commonness"></p>
+    </section>
+
+    <section id="seasonality" class="seasonality" hidden>
+      <h2 class="section-title">Seasonality</h2>
+      <div id="monthly-chart" class="monthly-chart"></div>
+    </section>
+
+    <section id="distribution" class="distribution" hidden>
+      <h2 class="section-title">Distribution</h2>
+      <div id="month-filter" class="month-filter" role="group" aria-label="Filter by month"></div>
+      <div id="region-selector" class="region-selector" role="group" aria-label="Jump to region"></div>
+      <div id="map" class="map"></div>
+      <p id="map-status" class="map-status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      Occurrence data &copy; <a href="https://www.gbif.org">GBIF.org</a>.
+      Country boundaries: <a href="https://www.naturalearthdata.com">Natural Earth</a> (public domain).
+    </p>
+  </footer>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
+    crossorigin=""
+  ></script>
+  <script src="lang.js"></script>
+  <script src="species.js"></script>
+</body>
+</html>

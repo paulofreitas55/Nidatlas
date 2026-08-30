@@ -1,6 +1,3 @@
-const LANGS = ["pt", "es", "en"];
-const LANG_STORAGE_KEY = "nidario-lang";
-
 const state = {
   all: [],
   taxaLabels: { orders: {}, families: {} },
@@ -21,52 +18,16 @@ async function init() {
     return;
   }
 
-  initLangSwitch();
+  state.lang = initLangSwitch((lang) => {
+    state.lang = lang;
+    applyFilterAndRender();
+  });
   buildQuickNav(state.all);
   applyFilterAndRender();
   document.getElementById("search-box").addEventListener("input", applyFilterAndRender);
 }
 
-// --- Language ---
-
-function detectDefaultLang() {
-  let saved = null;
-  try {
-    saved = localStorage.getItem(LANG_STORAGE_KEY);
-  } catch (err) {
-    // localStorage unavailable (private browsing, disabled storage, etc.)
-  }
-  if (saved && LANGS.includes(saved)) return saved;
-
-  const browserLang = (navigator.language || "en").slice(0, 2).toLowerCase();
-  return LANGS.includes(browserLang) ? browserLang : "en";
-}
-
-function initLangSwitch() {
-  state.lang = detectDefaultLang();
-  document.querySelectorAll(".lang-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.lang === state.lang);
-    btn.addEventListener("click", () => setLang(btn.dataset.lang));
-  });
-}
-
-function setLang(lang) {
-  state.lang = lang;
-  try {
-    localStorage.setItem(LANG_STORAGE_KEY, lang);
-  } catch (err) {
-    // ignore -- language just won't persist this session
-  }
-  document.querySelectorAll(".lang-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.lang === lang);
-  });
-  applyFilterAndRender();
-}
-
-// chosen language -> English -> null (caller falls back to scientific name only)
-function pickLabel(names, lang) {
-  return names[lang] || names.en || null;
-}
+// --- Language (see lang.js for detectDefaultLang / initLangSwitch / pickLabel) ---
 
 function commonNameFor(sp, lang) {
   return pickLabel({ pt: sp.common_name_pt, es: sp.common_name_es, en: sp.common_name_en }, lang);

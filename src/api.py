@@ -19,8 +19,16 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
     # generator + try/finally is FastAPI's documented pattern for a dependency
     # that owns a resource: it guarantees conn.close() runs after the request,
     # including when the handler raises.
+    #
+    # check_same_thread=False: FastAPI runs a sync generator dependency's setup
+    # and teardown as separate calls into its worker threadpool, and under
+    # concurrent load they can land on different threads even though they're
+    # never used concurrently (one request, sequential phases). sqlite3's
+    # default same-thread check rejects that; disabling it is safe here since
+    # each request still gets its own dedicated connection, never shared
+    # across requests.
     uri = queries.DB_PATH.resolve().as_uri() + "?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
+    conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
     try:
         yield conn
     finally:

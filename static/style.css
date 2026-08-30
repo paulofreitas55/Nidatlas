@@ -307,6 +307,31 @@ main {
   color: var(--muted);
 }
 
+/* Footer */
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 1rem;
+  text-align: center;
+}
+
+.site-footer p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.site-footer a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--green);
+}
+
 /* Wider screens: more nav breathing room, more columns per row */
 
 @media (min-width: 480px) {

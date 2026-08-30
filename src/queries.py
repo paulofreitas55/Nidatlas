@@ -59,24 +59,37 @@ def all_species(conn: sqlite3.Connection) -> list[dict]:
 
 
 def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
+    # Same dex_number definition (order/family/gbif_name, gbif_name UNIQUE so no
+    # ties) as all_species(), so numbering matches between the atlas and this page.
     row = conn.execute(
-        "SELECT id, gbif_name, bioclip_name, genus, family, \"order\", total_occurrences "
-        "FROM species WHERE id = ?",
+        """
+        WITH numbered AS (
+            SELECT id, gbif_name, bioclip_name, genus, family, "order", total_occurrences,
+                   common_name_pt, common_name_es, common_name_en,
+                   ROW_NUMBER() OVER (ORDER BY "order", family, gbif_name) AS dex_number
+            FROM species
+        )
+        SELECT id, gbif_name, bioclip_name, genus, family, "order", total_occurrences,
+               common_name_pt, common_name_es, common_name_en, dex_number
+        FROM numbered WHERE id = ?
+        """,
         (species_id,),
     ).fetchone()
     if row is None:
         raise ValueError(f"no species with id {species_id}")
-    sid, gbif_name, bioclip_name, genus, family, order, total_occurrences = row
+    (sid, gbif_name, bioclip_name, genus, family, order, total_occurrences,
+        common_name_pt, common_name_es, common_name_en, dex_number) = row
 
-    rank, percentile = conn.execute(
+    rank, percentile, total = conn.execute(
         """
         WITH ranked AS (
             SELECT id,
                    RANK() OVER (ORDER BY total_occurrences DESC) AS rank,
-                   PERCENT_RANK() OVER (ORDER BY total_occurrences) AS percentile
+                   PERCENT_RANK() OVER (ORDER BY total_occurrences) AS percentile,
+                   COUNT(*) OVER () AS total
             FROM species
         )
-        SELECT rank, percentile FROM ranked WHERE id = ?
+        SELECT rank, percentile, total FROM ranked WHERE id = ?
         """,
         (species_id,),
     ).fetchone()
@@ -119,7 +132,11 @@ def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
         "family": family,
         "order": order,
         "total_occurrences": total_occurrences,
-        "global_rank": {"rank": rank, "percentile": round(percentile * 100, 1)},
+        "common_name_pt": common_name_pt,
+        "common_name_es": common_name_es,
+        "common_name_en": common_name_en,
+        "dex_number": dex_number,
+        "global_rank": {"rank": rank, "total": total, "percentile": round(percentile * 100, 1)},
         "monthly_profile": monthly_profile,
         "top_cells": top_cells,
     }

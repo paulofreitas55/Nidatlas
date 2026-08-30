@@ -28,6 +28,8 @@ Covers bird species of Portugal and Spain. Includes only CC0 and CC-BY licensed 
 
 Species × year-month × MGRS 10km grid, for birds of Portugal and Spain. Includes only CC0 and CC-BY licensed records, with family-level counts for sampling-bias normalisation.
 
+**Country boundaries.** Natural Earth, [1:10m Cultural Vectors — Admin 0 Countries](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/), public domain. `static/iberia.geojson` is the Portugal and Spain features filtered from `ne_10m_admin_0_countries.geojson` (via the [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) mirror), trimmed to just `name`/`iso_a2` properties. Each country's geometry is a MultiPolygon that already includes its island territories (Azores and Madeira within Portugal; the Balearic and Canary Islands within Spain) — no separate island file needed. Originally sourced at 1:50m, which silently dropped several small islands (Porto Santo, Corvo, Graciosa); moved to 1:10m to recover them. Three uninhabited micro-islands (the Desertas and Selvagens reserves off Madeira, and La Graciosa in the Canaries) are still missing — they're absent from Natural Earth's admin-0 layer even at 10m and from its dedicated minor-islands layer, so recovering them would need a different source (e.g. OpenStreetMap coastline data).
+
 ## Known limitations
 
 - **Taxonomy version mismatch.** GBIF's current backbone and BioCLIP 2's internal vocabulary disagree on naming for a number of species (recent genus splits, spelling variants). This is resolved via `data/taxonomy_synonyms.csv`, which maps GBIF names to the BioCLIP-recognized equivalent used at inference time.
