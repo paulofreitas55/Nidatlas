@@ -522,6 +522,159 @@ def search_species(conn: sqlite3.Connection, text: str) -> list[dict]:
     ]
 
 
+# --- Phylogeny (data/nidatlas.db's phylo_nodes/phylo_closure -- see
+# scripts/fetch_phylogeny.py and scripts/build_phylogeny_db.py for how these
+# are populated, and that second script's module docstring for why an
+# adjacency list + closure table was chosen over nested sets or a
+# materialized path for exactly these four query patterns). ---
+#
+# Not every one of the 584 species has a phylo_nodes row: a handful resolve
+# to a valid Open Tree taxon that isn't sampled by any input phylogeny, so
+# they have no placement in this particular synthetic tree at all (see
+# fetch_phylogeny.py's report for the current list). That's a real,
+# disclosed data gap, not a bug -- these functions treat "species exists but
+# has no tree placement" as a valid, non-error outcome (empty list / a
+# clearly-labeled ValueError, never a silent guess at where it might go).
+
+
+def _phylo_node_id_for_species(conn: sqlite3.Connection, species_id: int) -> int | None:
+    exists = conn.execute("SELECT 1 FROM species WHERE id = ?", (species_id,)).fetchone()
+    if exists is None:
+        raise ValueError(f"no species with id {species_id}")
+    row = conn.execute("SELECT id FROM phylo_nodes WHERE species_id = ?", (species_id,)).fetchone()
+    return row[0] if row else None
+
+
+def phylo_closest_relatives(conn: sqlite3.Connection, species_id: int, limit: int = 10) -> list[dict]:
+    # "Closest" = fewest edges apart in the tree topology (no branch lengths
+    # exist to weigh this by evolutionary distance -- see the Newick this
+    # was parsed from). For every other tip, the shortest path to it runs
+    # through their most recent common ancestor with the query species,
+    # found here without a separate MRCA step: `ancestors` lists every one
+    # of the query species' own ancestors with its distance to it
+    # (steps_up); joining each to ALL of that ancestor's descendants and
+    # taking MIN(steps_up + c.depth) per candidate automatically selects the
+    # true MRCA for that candidate, since routing through any shallower
+    # shared ancestor only ever adds distance, never removes it.
+    node_id = _phylo_node_id_for_species(conn, species_id)
+    if node_id is None:
+        return []
+
+    rows = conn.execute(
+        """
+        WITH ancestors AS (
+            SELECT ancestor_id, depth AS steps_up FROM phylo_closure WHERE descendant_id = ?
+        ),
+        candidates AS (
+            SELECT c.descendant_id AS relative_node_id, MIN(a.steps_up + c.depth) AS distance
+            FROM ancestors a
+            JOIN phylo_closure c ON c.ancestor_id = a.ancestor_id
+            WHERE c.descendant_id != ?
+            GROUP BY c.descendant_id
+        )
+        SELECT s.id, s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en, candidates.distance
+        FROM candidates
+        JOIN phylo_nodes n ON n.id = candidates.relative_node_id
+        JOIN species s ON s.id = n.species_id
+        WHERE n.is_tip = 1 AND n.species_id IS NOT NULL
+        ORDER BY candidates.distance ASC, s.gbif_name ASC
+        LIMIT ?
+        """,
+        (node_id, node_id, limit),
+    ).fetchall()
+    return [
+        {
+            "species_id": sid, "gbif_name": g,
+            "common_name_pt": pt, "common_name_es": es, "common_name_en": en,
+            "distance": distance,
+        }
+        for sid, g, pt, es, en, distance in rows
+    ]
+
+
+def phylo_mrca(conn: sqlite3.Connection, species_id_a: int, species_id_b: int) -> dict:
+    # Most recent common ancestor = the deepest-from-root node that is an
+    # ancestor of BOTH species (see build_phylogeny_db.py's module docstring
+    # on why phylo_nodes.depth -- the node's OWN depth from root -- is what
+    # this needs to sort by, not phylo_closure.depth, which only measures
+    # distance to one side and would wrongly favor a shallow ancestor).
+    node_a = _phylo_node_id_for_species(conn, species_id_a)
+    node_b = _phylo_node_id_for_species(conn, species_id_b)
+    if node_a is None:
+        raise ValueError(f"species {species_id_a} has no placement in the phylogenetic tree")
+    if node_b is None:
+        raise ValueError(f"species {species_id_b} has no placement in the phylogenetic tree")
+
+    row = conn.execute(
+        """
+        SELECT n.id, n.name, n.ott_node_label, n.rank, n.depth
+        FROM phylo_closure ca
+        JOIN phylo_closure cb ON ca.ancestor_id = cb.ancestor_id
+        JOIN phylo_nodes n ON n.id = ca.ancestor_id
+        WHERE ca.descendant_id = ? AND cb.descendant_id = ?
+        ORDER BY n.depth DESC
+        LIMIT 1
+        """,
+        (node_a, node_b),
+    ).fetchone()
+    nid, name, label, rank, depth = row
+    return {"node_id": nid, "name": name, "ott_node_label": label, "rank": rank, "depth": depth}
+
+
+def phylo_descendant_species(conn: sqlite3.Connection, node_id: int) -> list[dict]:
+    exists = conn.execute("SELECT 1 FROM phylo_nodes WHERE id = ?", (node_id,)).fetchone()
+    if exists is None:
+        raise ValueError(f"no phylo node with id {node_id}")
+
+    rows = conn.execute(
+        """
+        SELECT s.id, s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en
+        FROM phylo_closure c
+        JOIN phylo_nodes n ON n.id = c.descendant_id
+        JOIN species s ON s.id = n.species_id
+        WHERE c.ancestor_id = ? AND n.is_tip = 1 AND n.species_id IS NOT NULL
+        ORDER BY s.gbif_name
+        """,
+        (node_id,),
+    ).fetchall()
+    return [
+        {"species_id": sid, "gbif_name": g, "common_name_pt": pt, "common_name_es": es, "common_name_en": en}
+        for sid, g, pt, es, en in rows
+    ]
+
+
+def phylo_subtree(conn: sqlite3.Connection, node_id: int) -> dict:
+    # Flat list of every node in the subtree (root included, via
+    # phylo_closure's own self-row at depth 0), each carrying its
+    # parent_id -- enough for a caller to reconstruct the actual topology
+    # for display without a second query per node.
+    exists = conn.execute("SELECT 1 FROM phylo_nodes WHERE id = ?", (node_id,)).fetchone()
+    if exists is None:
+        raise ValueError(f"no phylo node with id {node_id}")
+
+    rows = conn.execute(
+        """
+        SELECT n.id, n.name, n.ott_node_label, n.ott_id, n.rank, n.parent_id, n.species_id, n.is_tip, n.depth,
+               s.gbif_name
+        FROM phylo_closure c
+        JOIN phylo_nodes n ON n.id = c.descendant_id
+        LEFT JOIN species s ON s.id = n.species_id
+        WHERE c.ancestor_id = ?
+        ORDER BY n.depth, n.id
+        """,
+        (node_id,),
+    ).fetchall()
+    nodes = [
+        {
+            "id": nid, "name": name, "ott_node_label": label, "ott_id": ott_id, "rank": rank,
+            "parent_id": parent_id, "species_id": species_id, "is_tip": bool(is_tip), "depth": depth,
+            "gbif_name": gbif_name,
+        }
+        for nid, name, label, ott_id, rank, parent_id, species_id, is_tip, depth, gbif_name in rows
+    ]
+    return {"root_id": node_id, "node_count": len(nodes), "nodes": nodes}
+
+
 def _print_species_profile(profile: dict) -> None:
     print(f"=== {profile['gbif_name']} ({profile['bioclip_name']}) ===")
     print(f"{profile['genus']} / {profile['family']} / {profile['order']}")

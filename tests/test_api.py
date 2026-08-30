@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+import queries  # noqa: E402
 from api import app  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "nidatlas.db"
@@ -369,3 +370,121 @@ def test_concurrent_requests_do_not_break_the_db_connection(client: TestClient) 
         results = list(executor.map(hit, range(30)))
 
     assert results == [200] * 30
+
+
+# --- Phylogeny (data/phylo_nodes, data/phylo_closure -- see
+# scripts/fetch_phylogeny.py and scripts/build_phylogeny_db.py) ---
+
+
+@pytest.fixture(scope="session")
+def phylo_root_id(db_conn: sqlite3.Connection) -> int:
+    return db_conn.execute("SELECT id FROM phylo_nodes WHERE parent_id IS NULL").fetchone()[0]
+
+
+def test_species_relatives_finds_congeneric_species(client: TestClient) -> None:
+    # 566 = Turdus merula (Common Blackbird, see
+    # test_species_profile_includes_dex_number_and_vernacular_names above).
+    # Turdus iliacus (Redwing) is another Turdus species in the atlas, so it
+    # should show up among the very closest relatives by tree topology.
+    response = client.get("/api/species/566/relatives", params={"limit": 20})
+    assert response.status_code == 200
+    relatives = response.json()
+    assert len(relatives) > 0
+    assert any(r["gbif_name"] == "Turdus iliacus" for r in relatives)
+
+    distances = [r["distance"] for r in relatives]
+    assert distances == sorted(distances)
+    for r in relatives:
+        assert r["species_id"] != 566  # never lists the species itself
+
+
+def test_species_relatives_unknown_species_gives_404(client: TestClient) -> None:
+    response = client.get("/api/species/999999/relatives")
+    assert response.status_code == 404
+
+
+def test_species_relatives_species_with_no_tree_placement_returns_empty(client: TestClient) -> None:
+    # 289 = Himantopus himantopus, one of the species TNRS resolves to a
+    # valid OTT taxon that OToL's synthesis doesn't sample -- see
+    # fetch_phylogeny.py's report. The species is real (not a 404), it just
+    # has no placement in this tree, so this must be an empty 200, not an error.
+    response = client.get("/api/species/289/relatives")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_phylo_subtree_root_contains_every_placed_species(
+    client: TestClient, db_conn: sqlite3.Connection, phylo_root_id: int
+) -> None:
+    response = client.get(f"/api/phylo/{phylo_root_id}/subtree")
+    assert response.status_code == 200
+    subtree = response.json()
+    assert subtree["root_id"] == phylo_root_id
+
+    root_node = next(n for n in subtree["nodes"] if n["id"] == phylo_root_id)
+    assert root_node["parent_id"] is None
+    assert root_node["depth"] == 0
+
+    tip_species_ids = {n["species_id"] for n in subtree["nodes"] if n["is_tip"] and n["species_id"] is not None}
+    expected = db_conn.execute("SELECT COUNT(*) FROM phylo_nodes WHERE species_id IS NOT NULL").fetchone()[0]
+    assert len(tip_species_ids) == expected
+
+
+def test_phylo_subtree_of_a_genus_clade_is_smaller_than_the_whole_tree(
+    client: TestClient, db_conn: sqlite3.Connection, phylo_root_id: int
+) -> None:
+    # There's no single node literally named "Turdus" in this induced
+    # subtree -- OToL only labels an internal node when the requested tips
+    # happen to exactly span a taxon it already recognizes, which a
+    # same-genus PAIR rarely does on its own (see build_phylogeny_db.py's
+    # module docstring on unnamed mrca placeholders) -- so the Turdus clade
+    # here is reached via its two species' own MRCA instead of a name lookup.
+    turdus_node_id = queries.phylo_mrca(db_conn, 566, 565)["node_id"]  # Turdus merula, Turdus iliacus
+    response = client.get(f"/api/phylo/{turdus_node_id}/subtree")
+    assert response.status_code == 200
+    subtree = response.json()
+
+    full_tree = client.get(f"/api/phylo/{phylo_root_id}/subtree").json()
+    assert 0 < subtree["node_count"] < full_tree["node_count"]
+
+    tip_names = {n["gbif_name"] for n in subtree["nodes"] if n["is_tip"] and n["gbif_name"]}
+    assert "Turdus merula" in tip_names
+    assert "Turdus iliacus" in tip_names
+
+
+def test_phylo_subtree_unknown_node_gives_404(client: TestClient) -> None:
+    response = client.get("/api/phylo/999999999/subtree")
+    assert response.status_code == 404
+
+
+def test_phylo_mrca_of_congeneric_species_is_deeper_than_root(
+    db_conn: sqlite3.Connection, phylo_root_id: int
+) -> None:
+    # Direct queries.py test (MRCA isn't one of the two patterns exposed via
+    # the API, but it's one of the four required query functions).
+    mrca = queries.phylo_mrca(db_conn, 566, 565)  # Turdus merula, Turdus iliacus
+    assert mrca["depth"] > 0  # a real, more specific ancestor than the tree root
+    assert mrca["node_id"] != phylo_root_id
+
+
+def test_phylo_mrca_of_species_with_no_placement_raises(db_conn: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError):
+        queries.phylo_mrca(db_conn, 289, 566)  # 289 = Himantopus himantopus, unplaced
+
+
+def test_phylo_descendant_species_of_turdus_clade_matches_subtree_tips(
+    db_conn: sqlite3.Connection,
+) -> None:
+    # Direct queries.py test (descendant-listing isn't one of the two
+    # patterns exposed via the API here, but it's one of the four required).
+    turdus_node_id = queries.phylo_mrca(db_conn, 566, 565)["node_id"]  # Turdus merula, Turdus iliacus
+    descendants = queries.phylo_descendant_species(db_conn, turdus_node_id)
+    names = {d["gbif_name"] for d in descendants}
+    assert "Turdus merula" in names
+    assert "Turdus iliacus" in names
+    assert len(descendants) == len(names)  # no duplicate species rows
+
+
+def test_phylo_descendant_species_unknown_node_raises(db_conn: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError):
+        queries.phylo_descendant_species(db_conn, 999999999)

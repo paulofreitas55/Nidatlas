@@ -117,6 +117,29 @@ def api_cell_monthly(
     return queries.cell_monthly(conn, mgrs_prefix, month)
 
 
+@app.get("/api/species/{species_id}/relatives")
+def api_species_relatives(
+    species_id: int,
+    limit: int = Query(10, ge=1, le=100),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> list[dict]:
+    try:
+        return queries.phylo_closest_relatives(conn, species_id, limit)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
+
+
+@app.get("/api/phylo/{node_id}/subtree")
+def api_phylo_subtree(
+    node_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    try:
+        return queries.phylo_subtree(conn, node_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no phylo node with id {node_id}")
+
+
 @app.get("/api/regions")
 def api_list_regions(conn: sqlite3.Connection = Depends(get_db)) -> list[dict]:
     return queries.list_regions(conn)
