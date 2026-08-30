@@ -12,7 +12,7 @@ from pyproj import Transformer
 DATA_DIR = Path("data")
 CUBE_PATH = DATA_DIR / "cube_clean.parquet"
 SPECIES_LIST_PATH = DATA_DIR / "iberian_species.txt"
-DB_PATH = DATA_DIR / "nidario.db"
+DB_PATH = DATA_DIR / "nidatlas.db"
 
 CELL_SIZE_M = 10_000
 # zone, latitude band, 100km-square ID (unused), 2 digits = 1 per axis at 10km precision
@@ -47,10 +47,32 @@ CREATE TABLE species (
     common_name_en TEXT
 );
 
+-- Administrative regions (PT/ES NUTS3 districts/provinces, decomposed into
+-- individual islands for the archipelagos -- see scripts/build_regions.py).
+-- Populated later by scripts/assign_regions.py, not by this script (it needs
+-- static/regions.geojson, built separately from a downloaded GISCO NUTS3
+-- file) -- defined here, ahead of grid_cells, only so grid_cells.region_id
+-- has something to reference.
+CREATE TABLE regions (
+    id INTEGER PRIMARY KEY,
+    region_key TEXT NOT NULL UNIQUE,
+    name_pt TEXT NOT NULL,
+    name_es TEXT NOT NULL,
+    name_en TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    source_nuts_id TEXT,
+    -- Precomputed by scripts/assign_regions.py, not by this script (see its
+    -- comment for why: the live join is too slow to run per API request).
+    total_occurrences INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE grid_cells (
     mgrs_cell TEXT PRIMARY KEY,
     centroid_lat REAL NOT NULL,
-    centroid_lon REAL NOT NULL
+    centroid_lon REAL NOT NULL,
+    -- Populated later by scripts/assign_regions.py, same as regions above.
+    region_id INTEGER REFERENCES regions(id),
+    region_name TEXT
 );
 
 CREATE TABLE species_cell (

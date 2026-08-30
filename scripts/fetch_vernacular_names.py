@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "nidario.db"
+DB_PATH = DATA_DIR / "nidatlas.db"
 CACHE_PATH = DATA_DIR / "vernacular_cache.json"
 
 GBIF_API = "https://api.gbif.org/v1"
@@ -23,7 +23,7 @@ REQUEST_DELAY_SECONDS = 0.3
 PAGE_LIMIT = 300
 # GBIF's vernacularNames.language uses ISO 639-3 (three-letter) codes, not ISO 639-1.
 LANGUAGES = {"pt": "por", "es": "spa", "en": "eng"}
-USER_AGENT = "Nidario/1.0 (bird atlas project; vernacular-name fetch script)"
+USER_AGENT = "Nidatlas/1.0 (bird atlas project; vernacular-name fetch script)"
 
 
 def _get_json(url: str) -> dict:

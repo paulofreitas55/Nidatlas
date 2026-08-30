@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Query layer for the public atlas, over data/nidario.db. No web framework."""
+"""Query layer for the public atlas, over data/nidatlas.db. No web framework."""
 
 import re
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path("data") / "nidario.db"
+DB_PATH = Path("data") / "nidatlas.db"
 
 MGRS_PREFIX_RE = re.compile(r"^[0-9A-Z]*$")
 
@@ -188,9 +188,9 @@ def cell_summary(conn: sqlite3.Connection, mgrs_prefix: str) -> dict:
     # Sum occurrences and family_occurrences across every matching cell BEFORE
     # dividing, not average per-cell ratios -- a per-cell average would let a
     # single near-empty cell (e.g. 1 occurrence out of a family_occurrences of
-    # 1) dominate the ranking with a spurious 100% share. Summing both sides
-    # first answers "what share of all family activity in this whole prefix
-    # does this species account for", which is the meaningful quantity.
+    # 1) dominate with a spurious 100% share. share is kept as a
+    # sampling-effort normaliser (see _build_species_rows) but no longer
+    # drives the ranking -- see _rank_by_concentration.
     rows = conn.execute(
         """
         SELECT s.id, s.gbif_name, s.bioclip_name, s.family,
@@ -201,12 +201,13 @@ def cell_summary(conn: sqlite3.Connection, mgrs_prefix: str) -> dict:
         JOIN species s ON s.id = sc.species_id
         WHERE sc.mgrs_cell GLOB ?
         GROUP BY sc.species_id
-        ORDER BY share DESC, occurrences DESC
         """,
         (pattern,),
     ).fetchall()
 
-    return _species_ranking_result(mgrs_prefix, cell_count, rows)
+    global_by_species, global_total = _global_occurrences_by_species(conn, month=None)
+    species_rows = _rank_by_concentration(rows, global_by_species, global_total)
+    return _species_ranking_result(mgrs_prefix, cell_count, species_rows)
 
 
 def cell_monthly(conn: sqlite3.Connection, mgrs_prefix: str, month: int) -> dict:
@@ -216,7 +217,7 @@ def cell_monthly(conn: sqlite3.Connection, mgrs_prefix: str, month: int) -> dict
         "SELECT COUNT(*) FROM grid_cells WHERE mgrs_cell GLOB ?", (pattern,)
     ).fetchone()[0]
 
-    # Same summed-then-divided ranking as cell_summary, restricted to one month via species_cell_month.
+    # Same summed-then-divided totals as cell_summary, restricted to one month via species_cell_month.
     rows = conn.execute(
         """
         SELECT s.id, s.gbif_name, s.bioclip_name, s.family,
@@ -227,18 +228,153 @@ def cell_monthly(conn: sqlite3.Connection, mgrs_prefix: str, month: int) -> dict
         JOIN species s ON s.id = scm.species_id
         WHERE scm.mgrs_cell GLOB ? AND scm.month = ?
         GROUP BY scm.species_id
-        ORDER BY share DESC, occurrences DESC
         """,
         (pattern, month),
     ).fetchall()
 
-    result = _species_ranking_result(mgrs_prefix, cell_count, rows)
+    global_by_species, global_total = _global_occurrences_by_species(conn, month=month)
+    species_rows = _rank_by_concentration(rows, global_by_species, global_total)
+    result = _species_ranking_result(mgrs_prefix, cell_count, species_rows)
     result["month"] = month
     return result
 
 
-def _species_ranking_result(mgrs_prefix: str, cell_count: int, rows: list[tuple]) -> dict:
-    species_rows = [
+def list_regions(conn: sqlite3.Connection) -> list[dict]:
+    # region_key is included so the frontend can join this list against
+    # static/regions.geojson's own region_key property (the geometry's only
+    # shared identifier with the DB) to look up each polygon's numeric id.
+    # total_occurrences is regions.total_occurrences, precomputed by
+    # scripts/assign_regions.py -- not summed here, since the live join
+    # (species_cell through grid_cells) measured ~3.4s against the full
+    # table, far too slow to run on every request this list-heavy page makes.
+    #
+    # "OFFSHORE" (kind='fallback', now user-facing as "Alto-mar"/"Open sea")
+    # is included and just sorts last -- it's a real, browsable region on the
+    # region map (its cells are shown directly rather than a polygon, since
+    # it has none), not a hidden implementation detail the way it was before
+    # the region map existed.
+    rows = conn.execute(
+        """
+        SELECT r.id, r.region_key, r.name_pt, r.name_es, r.name_en, r.kind,
+               r.total_occurrences, COUNT(gc.mgrs_cell) AS cell_count
+        FROM regions r
+        LEFT JOIN grid_cells gc ON gc.region_id = r.id
+        GROUP BY r.id
+        ORDER BY CASE r.kind
+                     WHEN 'district_province' THEN 0
+                     WHEN 'island' THEN 1
+                     ELSE 2
+                 END, r.name_en
+        """
+    ).fetchall()
+    return [
+        {
+            "id": rid,
+            "region_key": region_key,
+            "name_pt": name_pt,
+            "name_es": name_es,
+            "name_en": name_en,
+            "kind": kind,
+            "total_occurrences": total_occurrences,
+            "cell_count": cell_count,
+        }
+        for rid, region_key, name_pt, name_es, name_en, kind, total_occurrences, cell_count in rows
+    ]
+
+
+def region_cells(conn: sqlite3.Connection, region_id: int) -> list[dict]:
+    # Per-cell totals (summed across every species) for one region -- used to
+    # render the offshore/"Alto-mar" fallback on the region map, which has no
+    # polygon of its own and so is drawn as its individual grid cells
+    # instead, the same way a species' distribution is drawn on the species
+    # map. Works for any region_id, not just the fallback one, in case a
+    # future view wants a region's own cells rather than its polygon fill.
+    exists = conn.execute("SELECT 1 FROM regions WHERE id = ?", (region_id,)).fetchone()
+    if exists is None:
+        raise ValueError(f"no region with id {region_id}")
+
+    rows = conn.execute(
+        """
+        SELECT gc.mgrs_cell, gc.centroid_lat, gc.centroid_lon, SUM(sc.occurrences) AS occurrences
+        FROM grid_cells gc
+        JOIN species_cell sc ON sc.mgrs_cell = gc.mgrs_cell
+        WHERE gc.region_id = ?
+        GROUP BY gc.mgrs_cell
+        ORDER BY occurrences DESC
+        """,
+        (region_id,),
+    ).fetchall()
+    return [
+        {"mgrs_cell": cell, "centroid_lat": lat, "centroid_lon": lon, "occurrences": occ}
+        for cell, lat, lon, occ in rows
+    ]
+
+
+def region_summary(conn: sqlite3.Connection, region_id: int, month: int | None = None) -> dict:
+    region = conn.execute(
+        "SELECT id, name_pt, name_es, name_en, kind FROM regions WHERE id = ?", (region_id,)
+    ).fetchone()
+    if region is None:
+        raise ValueError(f"no region with id {region_id}")
+    rid, name_pt, name_es, name_en, kind = region
+
+    cell_count = conn.execute(
+        "SELECT COUNT(*) FROM grid_cells WHERE region_id = ?", (region_id,)
+    ).fetchone()[0]
+
+    # Same summed-then-divided totals as cell_summary/cell_monthly (see that
+    # function's comment for why sum-then-divide, not average-per-cell),
+    # joined through grid_cells.region_id instead of filtering
+    # species_cell(_month) by an mgrs_cell prefix.
+    if month is None:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.gbif_name, s.bioclip_name, s.family,
+                   SUM(sc.occurrences) AS occurrences,
+                   SUM(sc.family_occurrences) AS family_occurrences,
+                   CAST(SUM(sc.occurrences) AS REAL) / SUM(sc.family_occurrences) AS share
+            FROM species_cell sc
+            JOIN grid_cells gc ON gc.mgrs_cell = sc.mgrs_cell
+            JOIN species s ON s.id = sc.species_id
+            WHERE gc.region_id = ?
+            GROUP BY sc.species_id
+            """,
+            (region_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.gbif_name, s.bioclip_name, s.family,
+                   SUM(scm.occurrences) AS occurrences,
+                   SUM(scm.family_occurrences) AS family_occurrences,
+                   CAST(SUM(scm.occurrences) AS REAL) / SUM(scm.family_occurrences) AS share
+            FROM species_cell_month scm
+            JOIN grid_cells gc ON gc.mgrs_cell = scm.mgrs_cell
+            JOIN species s ON s.id = scm.species_id
+            WHERE gc.region_id = ? AND scm.month = ?
+            GROUP BY scm.species_id
+            """,
+            (region_id, month),
+        ).fetchall()
+
+    global_by_species, global_total = _global_occurrences_by_species(conn, month=month)
+    species_rows = _rank_by_concentration(rows, global_by_species, global_total)
+    result = {
+        "region_id": rid,
+        "name_pt": name_pt,
+        "name_es": name_es,
+        "name_en": name_en,
+        "kind": kind,
+        "cell_count": cell_count,
+        **_ranking_totals(species_rows),
+    }
+    if month is not None:
+        result["month"] = month
+    return result
+
+
+def _build_species_rows(rows: list[tuple]) -> list[dict]:
+    return [
         {
             "species_id": sid,
             "gbif_name": gbif_name,
@@ -246,18 +382,112 @@ def _species_ranking_result(mgrs_prefix: str, cell_count: int, rows: list[tuple]
             "family": family,
             "occurrences": occurrences,
             "family_occurrences": family_occurrences,
+            # share-of-family: kept as a sampling-effort normaliser (how much
+            # of this family's activity in-scope this species accounts for),
+            # its original purpose -- it no longer drives top/bottom ranking
+            # (see _rank_by_concentration for why: a species that is the sole
+            # member of a small family always scored share == 1.0 in every
+            # region it appeared in at all, which made "most characteristic"
+            # nearly identical everywhere).
             "share": share,
         }
         for sid, gbif_name, bioclip_name, family, occurrences, family_occurrences, share in rows
     ]
 
+
+def _global_occurrences_by_species(conn: sqlite3.Connection, month: int | None) -> tuple[dict[int, int], int]:
+    # Per-species and whole-Iberia occurrence totals, used as the denominator
+    # for concentration's global_share (see _rank_by_concentration). Restricted
+    # to `month` when a month filter is active, so a species that migrates
+    # through everywhere in month M isn't read as "concentrated" in every
+    # region that has it that month -- global_share is computed over the same
+    # period as regional_share, not always the annual total, so seasonality
+    # and genuine geographic concentration don't get conflated.
+    if month is None:
+        rows = conn.execute("SELECT id, total_occurrences FROM species").fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT species_id, occurrences FROM species_month WHERE month = ?", (month,)
+        ).fetchall()
+    by_species = dict(rows)
+    return by_species, sum(by_species.values())
+
+
+def _rank_by_concentration(
+    rows: list[tuple], global_by_species: dict[int, int], global_total: int
+) -> list[dict]:
+    # concentration = regional_share / global_share, where regional_share is
+    # a species' share of all occurrences in the current scope (a cell
+    # prefix or a region, optionally one month) and global_share is that
+    # species' share of all occurrences across the whole Iberia dataset (see
+    # _global_occurrences_by_species). == 1 means exactly as prevalent here
+    # as everywhere; > 1 means concentrated here; < 1 means underrepresented.
+    #
+    # This replaces share-of-family as the ranking driver (still computed
+    # and kept on each row -- see _build_species_rows) because concentration
+    # compares a species against its OWN distribution instead of its
+    # family's, so the ranking actually differentiates regions rather than
+    # surfacing the same monotypic-family species as "most characteristic"
+    # everywhere.
+    #
+    species_rows = _build_species_rows(rows)
+    regional_total = sum(r["occurrences"] for r in species_rows)
+    for r in species_rows:
+        regional_share = (r["occurrences"] / regional_total) if regional_total else 0.0
+        global_occurrences = global_by_species.get(r["species_id"], 0)
+        global_share = (global_occurrences / global_total) if global_total else 0.0
+        r["concentration"] = (regional_share / global_share) if global_share else 0.0
+    # Concentration DESC is the primary key; occurrences DESC then gbif_name
+    # break ties deterministically (a handful of species can land on exactly
+    # the same ratio, e.g. two species confined to a single shared cell).
+    species_rows.sort(key=lambda r: (-r["concentration"], -r["occurrences"], r["gbif_name"]))
+    return species_rows
+
+
+# Minimum in-scope occurrences for a species to be eligible for the
+# top/bottom-15 ranking lists (not a data-inclusion filter: total_occurrences
+# and distinct_species below still count every species, this only gates list
+# membership). Without it, a single-record vagrant with a huge global
+# population reads as maximally "underrepresented" (concentration near
+# zero), swamping the bottom list with statistical noise from a sample size
+# of 1-2 rather than species genuinely uncommon in the region relative to
+# their own normal range. Checked directly against the smallest regions in
+# the dataset (Corvo: 177 species, 129 still clear this bar; Melilla: 144
+# species, 82 clear it) to confirm even a 3-cell region has comfortably more
+# than 15 eligible species on each side, so this never starves either list.
+MIN_LIST_OCCURRENCES = 5
+
+
+def _ranking_totals(species_rows: list[dict]) -> dict:
+    # Shared by both cell- and region-level rankings: top/bottom 15 by
+    # concentration (species_rows must already be sorted descending by it --
+    # see _rank_by_concentration), plus the totals they're computed from.
+    # Kept separate from the caller-specific identifying fields (mgrs_prefix
+    # vs region_id/name) so cell_summary/cell_monthly and region_summary can
+    # each wrap this with their own top-level shape instead of one function
+    # guessing at both.
+    #
+    # total_occurrences/distinct_species intentionally come from the FULL,
+    # unfiltered species_rows (every species genuinely present in-scope);
+    # MIN_LIST_OCCURRENCES only gates which of them are eligible to appear
+    # in top_species/bottom_species, applied to both ends symmetrically --
+    # the same small-sample noise that makes a 1-occurrence vagrant look
+    # maximally underrepresented can just as easily make one look spuriously
+    # "characteristic" if its global total also happens to be tiny.
+    eligible = [r for r in species_rows if r["occurrences"] >= MIN_LIST_OCCURRENCES]
+    return {
+        "total_occurrences": sum(r["occurrences"] for r in species_rows),
+        "distinct_species": len(species_rows),
+        "top_species": eligible[:15],
+        "bottom_species": list(reversed(eligible[-15:])),
+    }
+
+
+def _species_ranking_result(mgrs_prefix: str, cell_count: int, species_rows: list[dict]) -> dict:
     return {
         "mgrs_prefix": mgrs_prefix,
         "cell_count": cell_count,
-        "total_occurrences": sum(r["occurrences"] for r in species_rows),
-        "distinct_species": len(species_rows),
-        "top_species": species_rows[:15],
-        "bottom_species": list(reversed(species_rows[-15:])),
+        **_ranking_totals(species_rows),
     }
 
 
@@ -315,14 +545,14 @@ def _print_cell_summary(summary: dict) -> None:
     print(f"=== Cell summary: {label} ===")
     print(f"Cells: {summary['cell_count']:,}  Total occurrences: {summary['total_occurrences']:,}  "
           f"Distinct species: {summary['distinct_species']:,}")
-    print("Top 15 by share of family:")
+    print("Top 15 by concentration (regional_share / global_share):")
     for r in summary["top_species"]:
-        print(f"  {r['gbif_name']:<28} {r['family']:<16} {r['occurrences']:>7,} / "
-              f"{r['family_occurrences']:>7,}  {r['share']:>6.1%}")
-    print("Bottom 15 by share of family:")
+        print(f"  {r['gbif_name']:<28} {r['family']:<16} {r['occurrences']:>7,}  "
+              f"conc={r['concentration']:>7.2f}x  family_share={r['share']:>6.1%}")
+    print("Bottom 15 by concentration (regional_share / global_share):")
     for r in summary["bottom_species"]:
-        print(f"  {r['gbif_name']:<28} {r['family']:<16} {r['occurrences']:>7,} / "
-              f"{r['family_occurrences']:>7,}  {r['share']:>6.1%}")
+        print(f"  {r['gbif_name']:<28} {r['family']:<16} {r['occurrences']:>7,}  "
+              f"conc={r['concentration']:>7.2f}x  family_share={r['share']:>6.1%}")
 
 
 if __name__ == "__main__":

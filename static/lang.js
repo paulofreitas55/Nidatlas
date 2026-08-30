@@ -1,9 +1,9 @@
-// Shared language-switch logic used by every page (index.html, species.html, ...).
+// Shared language-switch logic used by every page (map.html, atlas.html, species.html).
 // Plain <script> include, no bundler -- must load before any page script that
 // calls these functions.
 
 const LANGS = ["pt", "es", "en"];
-const LANG_STORAGE_KEY = "nidario-lang";
+const LANG_STORAGE_KEY = "nidatlas-lang";
 
 function detectDefaultLang() {
   let saved = null;
@@ -33,10 +33,10 @@ function pickLabel(names, lang) {
 
 // --- UI translations (static/i18n.json) ---
 //
-// Single source of truth for every hardcoded UI string across both pages:
+// Single source of truth for every hardcoded UI string across every page:
 // {"key.path": {"en": "...", "pt": "...", "es": "..."}, ...}. Loaded once
-// and cached module-level (not per-page state) since both index.html and
-// species.html load lang.js the same way and neither needs its own copy.
+// and cached module-level (not per-page state) since every page loads
+// lang.js the same way and none of them needs its own copy.
 let I18N = null;
 
 async function loadTranslations() {
@@ -71,8 +71,8 @@ function tPlural(baseKey, count, lang, vars) {
 }
 
 // Applies every declarative data-i18n(-*) binding on the current page --
-// covers all the static (not JS-rendered) text in index.html/species.html,
-// so most markup never needs a matching line of JS to translate it.
+// covers all the static (not JS-rendered) text on every page, so most
+// markup never needs a matching line of JS to translate it.
 function applyStaticTranslations(lang) {
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n, lang);

@@ -20,13 +20,16 @@
   "nav.jump_to_region_aria": { "en": "Jump to region", "pt": "Ir para a região", "es": "Ir a la región" },
   "nav.filter_by_month_aria": { "en": "Filter by month", "pt": "Filtrar por mês", "es": "Filtrar por mes" },
   "nav.back_to_atlas": { "en": "← Back to Atlas", "pt": "← Voltar ao Atlas", "es": "← Volver al Atlas" },
+  "nav.primary_aria": { "en": "Primary navigation", "pt": "Navegação principal", "es": "Navegación principal" },
+  "nav.map": { "en": "Map", "pt": "Mapa", "es": "Mapa" },
+  "nav.atlas": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
 
   "page.index_title": {
-    "en": "Nidario — Birds of the Iberian Peninsula",
-    "pt": "Nidario — Aves da Península Ibérica",
-    "es": "Nidario — Aves de la Península Ibérica"
+    "en": "Nidatlas — Birds of the Iberian Peninsula",
+    "pt": "Nidatlas — Aves da Península Ibérica",
+    "es": "Nidatlas — Aves de la Península Ibérica"
   },
-  "page.species_fallback_title": { "en": "Species — Nidario", "pt": "Espécie — Nidario", "es": "Especie — Nidario" },
+  "page.species_fallback_title": { "en": "Species — Nidatlas", "pt": "Espécie — Nidatlas", "es": "Especie — Nidatlas" },
 
   "atlas.page_title": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
   "atlas.no_match": {
@@ -85,7 +88,7 @@
   "map.popup_records_other": { "en": "{count} records", "pt": "{count} registos", "es": "{count} registros" },
   "map.popup_view_gbif": { "en": "View on GBIF →", "pt": "Ver no GBIF →", "es": "Ver en GBIF →" },
 
-  "region.mainland": { "en": "Mainland", "pt": "Continente", "es": "Península" },
+  "region.mainland": { "en": "Main", "pt": "Principal", "es": "Principal" },
   "region.azores": { "en": "Azores", "pt": "Açores", "es": "Azores" },
   "region.azores_west_panel": {
     "en": "Western (Flores, Corvo)",
@@ -115,5 +118,72 @@
     "en": "Balearics (Mallorca, Menorca, Ibiza, Formentera)",
     "pt": "Baleares (Mallorca, Menorca, Ibiza, Formentera)",
     "es": "Baleares (Mallorca, Menorca, Ibiza, Formentera)"
+  },
+  "region.offshore": { "en": "Open sea", "pt": "Alto-mar", "es": "Alta mar" },
+
+  "regionmap.page_title": { "en": "Regions", "pt": "Regiões", "es": "Regiones" },
+  "regionmap.loading": { "en": "Loading regions…", "pt": "A carregar regiões…", "es": "Cargando regiones…" },
+  "regionmap.error_load": {
+    "en": "Could not load the region map.",
+    "pt": "Não foi possível carregar o mapa de regiões.",
+    "es": "No se pudo cargar el mapa de regiones."
+  },
+  "regionmap.panel_close_aria": { "en": "Close panel", "pt": "Fechar painel", "es": "Cerrar panel" },
+  "regionmap.distinct_species_label": {
+    "en": "Distinct species",
+    "pt": "Espécies distintas",
+    "es": "Especies distintas"
+  },
+  "regionmap.most_common_title": {
+    "en": "Most characteristic (concentration)",
+    "pt": "Mais características (concentração)",
+    "es": "Más características (concentración)"
+  },
+  "regionmap.rarest_title": {
+    "en": "Least characteristic (concentration)",
+    "pt": "Menos características (concentração)",
+    "es": "Menos características (concentración)"
+  },
+  "regionmap.no_region_selected": {
+    "en": "Select a region on the map to see its species.",
+    "pt": "Selecione uma região no mapa para ver as suas espécies.",
+    "es": "Seleccione una región en el mapa para ver sus especies."
+  },
+  "regionmap.error_panel": {
+    "en": "Could not load this region.",
+    "pt": "Não foi possível carregar esta região.",
+    "es": "No se pudo cargar esta región."
+  },
+  "regionmap.region_count_one": { "en": "{count} region", "pt": "{count} região", "es": "{count} región" },
+  "regionmap.region_count_other": { "en": "{count} regions", "pt": "{count} regiões", "es": "{count} regiones" },
+  "regionmap.species_row_meta": {
+    "en": "{family} · {occurrences}",
+    "pt": "{family} · {occurrences}",
+    "es": "{family} · {occurrences}"
+  },
+  "regionmap.tier_very_high": {
+    "en": "Strongly associated with this region",
+    "pt": "Fortemente associada a esta região",
+    "es": "Fuertemente asociada a esta región"
+  },
+  "regionmap.tier_high": {
+    "en": "Especially common here",
+    "pt": "Especialmente comum aqui",
+    "es": "Especialmente común aquí"
+  },
+  "regionmap.tier_moderate": {
+    "en": "More common here than elsewhere",
+    "pt": "Mais comum aqui do que noutras zonas",
+    "es": "Más común aquí que en otras zonas"
+  },
+  "regionmap.tier_slight": {
+    "en": "Slightly more common here than elsewhere",
+    "pt": "Ligeiramente mais comum aqui do que noutras zonas",
+    "es": "Ligeramente más común aquí que en otras zonas"
+  },
+  "regionmap.tier_below": {
+    "en": "Less common here than elsewhere",
+    "pt": "Menos comum aqui do que noutras zonas",
+    "es": "Menos común aquí que en otras zonas"
   }
 }

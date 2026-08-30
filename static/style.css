@@ -40,9 +40,55 @@ a {
 .site-header {
   position: sticky;
   top: 0;
-  z-index: 10;
+  /* Leaflet's own CSS puts its zoom control / popups / attribution at
+     z-index up to 1000 (.leaflet-top/.leaflet-bottom, .leaflet-pane
+     children) -- on map.html and species.html, scrolling the page past a
+     map panel put those controls above this sticky header instead of
+     behind it, since 10 lost to Leaflet's 1000. Comfortably above that
+     ceiling so the header always wins, on every page (not just the two
+     with maps), rather than tracking Leaflet's own value here. */
+  z-index: 2000;
   background: var(--paper);
   border-bottom: 1px solid var(--line);
+}
+
+/* Top-level MAP/ATLAS switch -- the site's primary navigation, so it's
+   sized and weighted to read as such: below the wordmark (not above it,
+   where it would read as a status strip rather than a way to navigate),
+   its own strip rather than folded into brand-row's flex layout (so it
+   doesn't have to compete for space with the wordmark/lang-switch on
+   narrow screens), and identical across map.html, atlas.html and
+   species.html regardless of what each page's own header-row otherwise
+   contains (search box, back link, ...). */
+.top-nav {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0 1rem 0.85rem;
+}
+
+.top-nav-link {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--paper-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 1.6rem;
+}
+
+.top-nav-link:hover,
+.top-nav-link:focus-visible {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.top-nav-link.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--paper);
 }
 
 .header-row {
@@ -351,6 +397,220 @@ main {
   color: var(--green);
 }
 
+/* Key figures (species page's total-records/global-rank row, and the region
+   map's side-panel total-records/species-count row) and section titles
+   (species page's Seasonality/Distribution headings, and the region panel's
+   Most common/Rarest headings). */
+
+.key-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin: 0.5rem 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+}
+
+.figure-value {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--green);
+}
+
+.figure-label {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.section-title {
+  margin: 1.5rem 0 0.5rem;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--green);
+}
+
+/* Month filter, region selector, and map panels/legend/popup -- shared by
+   the species map (species.html) and the region map (map.html), so this
+   lives here rather than being duplicated in species.css and map.css. */
+
+.month-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.month-btn {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--paper-alt);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  cursor: pointer;
+}
+
+.month-btn:hover,
+.month-btn:focus-visible {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.month-btn.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--paper);
+}
+
+.region-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.region-btn {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.22rem 0.6rem;
+  cursor: pointer;
+}
+
+.region-btn:hover,
+.region-btn:focus-visible {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.region-btn.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--paper);
+}
+
+/* Archipelagos are rendered as multiple side-by-side panels (island groups
+   are too far apart to share one sane frame) -- mainland is just a
+   single-panel group so it reuses the exact same layout, not a special
+   case. Row on wide screens, column on narrow ones (region-selector /
+   month-filter's own breakpoint below matches). */
+.map-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.map-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1 1 0%;
+  min-width: 0; /* let flex children shrink below their content size */
+}
+
+.map-panel-label {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.map-panel {
+  width: 100%;
+  height: 45vh;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+/* .map-panel, not a bare class: leaflet.css loads after this stylesheet and
+   its own .leaflet-container rule sets a default grey background at the
+   same specificity, so a plain .map-panel background rule loses the cascade
+   and never shows without the compound selector raising specificity. Muted
+   blue-grey "sea" -- land is the light paper tone (LAND_FILL in common.js,
+   a literal color string since Leaflet needs one there, not a CSS var), so
+   land vs. sea now reads as a real, unambiguous distinction, not two shades
+   of the same paper hue. */
+.map-panel.leaflet-container {
+  background: #c2cdd2;
+}
+
+@media (min-width: 640px) {
+  .map-panels {
+    flex-direction: row;
+    align-items: stretch;
+    height: 60vh;
+    min-height: 320px;
+  }
+
+  .map-panel {
+    height: 100%;
+  }
+}
+
+.map-legend {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.map-status {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.map-popup {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.map-popup a {
+  color: var(--green);
+  font-weight: 600;
+}
+
 /* Wider screens: more nav breathing room, more columns per row */
 
 @media (min-width: 480px) {
@@ -360,6 +620,15 @@ main {
 }
 
 @media (min-width: 640px) {
+  .top-nav {
+    padding: 0 1.5rem 1rem;
+  }
+
+  .top-nav-link {
+    font-size: 1.05rem;
+    padding: 0.7rem 2rem;
+  }
+
   .header-row {
     flex-direction: row;
     align-items: center;

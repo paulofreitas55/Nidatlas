@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nidatlas — Birds of the Iberian Peninsula</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="map.css">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=="
+    crossorigin=""
+  >
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark"><a href="/">Nidatlas</a></h1>
+        <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+    <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
+      <a href="/" class="top-nav-link active" data-i18n="nav.map">Map</a>
+      <a href="/atlas" class="top-nav-link" data-i18n="nav.atlas">Atlas</a>
+    </nav>
+  </header>
+
+  <main id="map-main" class="map-main">
+    <p id="load-status" class="status" aria-live="polite" data-i18n="regionmap.loading">Loading regions…</p>
+
+    <div id="map-content" class="map-content" hidden>
+      <h2 class="page-title" data-i18n="regionmap.page_title">Regions</h2>
+
+      <div class="map-layout">
+        <div class="map-column">
+          <div id="region-selector" class="region-selector" role="group" data-i18n-aria-label="nav.jump_to_region_aria"></div>
+          <div id="month-filter" class="month-filter" role="group" data-i18n-aria-label="nav.filter_by_month_aria"></div>
+          <div id="map-panels" class="map-panels"></div>
+          <p id="map-status" class="map-status" aria-live="polite"></p>
+        </div>
+
+        <aside id="region-panel" class="region-panel">
+          <p id="region-panel-empty" class="region-panel-empty" data-i18n="regionmap.no_region_selected">
+            Select a region on the map to see its species.
+          </p>
+          <div id="region-panel-content" class="region-panel-content" hidden>
+            <button
+              type="button"
+              id="region-panel-close"
+              class="region-panel-close"
+              data-i18n-aria-label="regionmap.panel_close_aria"
+            >&times;</button>
+            <h3 id="region-panel-name" class="region-panel-name"></h3>
+            <div class="key-figures region-panel-figures">
+              <div class="figure">
+                <span id="region-panel-total" class="figure-value"></span>
+                <span class="figure-label" data-i18n="species.total_records_label">Total records</span>
+              </div>
+              <div class="figure">
+                <span id="region-panel-species-count" class="figure-value"></span>
+                <span class="figure-label" data-i18n="regionmap.distinct_species_label">Distinct species</span>
+              </div>
+            </div>
+            <p id="region-panel-status" class="map-status" aria-live="polite"></p>
+            <div id="region-panel-lists" class="region-panel-lists" hidden>
+              <section>
+                <h4 class="section-title" data-i18n="regionmap.most_common_title">Most common (share of family)</h4>
+                <ul id="region-panel-top" class="region-species-list"></ul>
+              </section>
+              <section>
+                <h4 class="section-title" data-i18n="regionmap.rarest_title">Rarest (share of family)</h4>
+                <ul id="region-panel-bottom" class="region-species-list"></ul>
+              </section>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p id="footer-data-line"></p>
+    <p id="footer-attribution-line"></p>
+  </footer>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=="
+    crossorigin=""
+  ></script>
+  <script src="lang.js"></script>
+  <script src="common.js"></script>
+  <script src="map.js"></script>
+</body>
+</html>

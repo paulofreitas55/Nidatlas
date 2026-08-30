@@ -1,4 +1,4 @@
-# Nidario — Design Direction
+# Nidatlas — Design Direction
 
 Aesthetic: modern field guide meets collector's album. Calm colors,
 playful structure.

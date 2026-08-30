@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Species — Nidario</title>
+  <title>Species — Nidatlas</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="species.css">
   <link
@@ -17,15 +17,19 @@
   <header class="site-header">
     <div class="header-row">
       <div class="brand-row">
-        <h1 class="wordmark"><a href="index.html">Nidario</a></h1>
+        <h1 class="wordmark"><a href="/">Nidatlas</a></h1>
         <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
           <button type="button" class="lang-btn" data-lang="pt">PT</button>
           <button type="button" class="lang-btn" data-lang="es">ES</button>
           <button type="button" class="lang-btn" data-lang="en">EN</button>
         </div>
       </div>
-      <a class="back-link" href="index.html" data-i18n="nav.back_to_atlas">&larr; Back to Atlas</a>
+      <a class="back-link" href="/atlas" data-i18n="nav.back_to_atlas">&larr; Back to Atlas</a>
     </div>
+    <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
+      <a href="/" class="top-nav-link" data-i18n="nav.map">Map</a>
+      <a href="/atlas" class="top-nav-link active" data-i18n="nav.atlas">Atlas</a>
+    </nav>
   </header>
 
   <main id="species-main" class="species-main">
@@ -78,6 +82,7 @@
     crossorigin=""
   ></script>
   <script src="lang.js"></script>
+  <script src="common.js"></script>
   <script src="species.js"></script>
 </body>
 </html>

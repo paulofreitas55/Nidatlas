@@ -1,0 +1,208 @@
+/* Region map (map.html) -- page-specific styles only. Header, key-figures,
+   section-title, month-filter, region-selector and map-panels/legend/popup
+   all come from style.css, shared with species.html. */
+
+/* This page's main content is wide and left-aligned, not the centered
+   ~1100px column style.css's bare `main` selector gives every other page --
+   the map is the primary content here and deserves the room, and a huge
+   left/right gutter either side of a map looks like wasted space rather
+   than a deliberate reading measure (which is what centering is for on the
+   text-heavy atlas/species pages). max-width still caps it well short of
+   "edge to edge" on an ultra-wide monitor. */
+#map-main {
+  max-width: 1800px;
+  margin: 0;
+}
+
+/* Side panel on wide screens, a plain stacked section below the map on
+   narrow ones -- column by default, row (map column + fixed-width sidebar)
+   from 900px up, where there's enough width for both without either
+   cramping the map panels or squeezing the species lists unreadably thin. */
+.map-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.map-column {
+  min-width: 0; /* let the map panels shrink below their content size */
+}
+
+@media (min-width: 900px) {
+  .map-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .map-column {
+    flex: 1 1 auto;
+  }
+
+  .region-panel {
+    flex: 0 0 420px;
+  }
+}
+
+/* The map is this page's primary content, so its panels get noticeably
+   more vertical room than the species page's own .map-panel sizing
+   (style.css, shared with species.html and left as-is there). Scoped to
+   #map-panels (this page's own id) rather than touching the shared rule,
+   and pinned to the SAME 640px breakpoint style.css itself uses to switch
+   .map-panels from a stacked column (each .map-panel sized individually)
+   to a row (children at height:100% of the container) -- only the
+   height VALUES are overridden here, not that row/column behavior itself.
+   Below 640px, .map-panel is what needs the taller height (each panel
+   stacks and sizes itself); at 640px+, it's the container that needs it
+   (children already fill it via style.css's own height:100% rule). */
+#map-panels .map-panel {
+  height: 60vh;
+  min-height: 420px;
+}
+
+@media (min-width: 640px) {
+  #map-panels.map-panels {
+    height: 82vh;
+    min-height: 620px;
+  }
+
+  #map-panels .map-panel {
+    height: 100%; /* restores style.css's own row-layout rule at this breakpoint */
+  }
+}
+
+.region-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-box);
+  padding: 0.75rem 0.9rem;
+}
+
+.region-panel-empty {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.region-panel-content {
+  position: relative;
+}
+
+.region-panel-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  line-height: 1.6rem;
+  text-align: center;
+  padding: 0;
+  font-size: 1.1rem;
+  font-family: var(--font-sans);
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.region-panel-close:hover,
+.region-panel-close:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.region-panel-name {
+  margin: 0 1.8rem 0.4rem 0;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--green);
+}
+
+/* Reuses .key-figures/.figure/.figure-value/.figure-label from style.css --
+   just needs a bit less vertical padding to fit a narrower sidebar column. */
+.region-panel-figures {
+  padding: 0.6rem 0;
+  gap: 1rem;
+}
+
+/* Most/Least characteristic side by side rather than one long scroll --
+   stacked on narrow screens (including a narrow region-panel sidebar on a
+   phone, where the panel itself has already dropped below the map per
+   .map-layout's own 900px breakpoint), two columns once there's enough
+   width for both to stay readable rather than squeezed. */
+.region-panel-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .region-panel-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1rem;
+  }
+}
+
+.region-species-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.region-species-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.region-species-row:hover,
+.region-species-row:focus-visible {
+  border-color: var(--accent);
+}
+
+.region-species-name {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+
+/* Plain-language concentration tier ("Especially common here") leads;
+   the numeric ratio is deliberately the smaller, muted element right next
+   to it, not the other way around -- the phrase carries the meaning, the
+   number is just there for whoever wants the precise figure. */
+.region-species-tier {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.region-species-tier-phrase {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.region-species-tier-ratio {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.region-species-meta {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+}

@@ -8,9 +8,10 @@ import queries
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Path, Query
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="Nidario API")
+app = FastAPI(title="Nidatlas API")
 # static/iberia.geojson and the cell-list endpoints are JSON/geometry --
 # exactly the content type gzip compresses best (typically 80-90% smaller
 # in transfer size), so this cuts real load time on top of the vertex-count
@@ -18,10 +19,27 @@ app = FastAPI(title="Nidario API")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+@app.middleware("http")
+async def no_cache_headers(request, call_next):
+    # StaticFiles otherwise lets browsers cache map.js/common.js/*.geojson/etc
+    # indefinitely between visits (Starlette sets Last-Modified/ETag but no
+    # Cache-Control, and browsers apply their own heuristic freshness window
+    # on top of that) -- during active development, where these files change
+    # every few minutes, that heuristic window is exactly wrong: a user can
+    # reload the page and still get yesterday's JS with no visible sign
+    # anything is stale. no-store forces every request to hit the server
+    # fresh, trading away caching entirely in exchange for "what's on disk is
+    # always what's served" -- the right tradeoff for a small local app, not
+    # necessarily for a public production deployment under real load.
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def get_db() -> Generator[sqlite3.Connection, None, None]:
     # One connection per request, opened read-only (mode=ro) so the public API
     # can never write to the database no matter what a handler does with it --
-    # even a bug or a future endpoint can't corrupt data/nidario.db. The
+    # even a bug or a future endpoint can't corrupt data/nidatlas.db. The
     # generator + try/finally is FastAPI's documented pattern for a dependency
     # that owns a resource: it guarantees conn.close() runs after the request,
     # including when the handler raises.
@@ -99,9 +117,54 @@ def api_cell_monthly(
     return queries.cell_monthly(conn, mgrs_prefix, month)
 
 
-# Mounted last and at "/" so it only catches paths no /api/* route above
-# already matched -- Starlette tries routes in registration order, and a
-# Mount at "/" would otherwise shadow everything if it came first.
+@app.get("/api/regions")
+def api_list_regions(conn: sqlite3.Connection = Depends(get_db)) -> list[dict]:
+    return queries.list_regions(conn)
+
+
+@app.get("/api/regions/{region_id}")
+def api_region_summary(
+    region_id: int,
+    month: int | None = Query(None, ge=1, le=12),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    try:
+        return queries.region_summary(conn, region_id, month)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no region with id {region_id}")
+
+
+@app.get("/api/regions/{region_id}/cells")
+def api_region_cells(
+    region_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> list[dict]:
+    try:
+        return queries.region_cells(conn, region_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no region with id {region_id}")
+
+
+# The region map is the site's landing page and the species atlas lives at
+# /atlas -- both are plain static files (static/map.html, static/atlas.html),
+# but StaticFiles(html=True) below only auto-serves index.html for "/", not
+# a same-directory file under a different name. These two explicit routes
+# are declared ahead of the Mount for that reason; every other static asset
+# (map.js, atlas.html hit directly, species.html, *.geojson, ...) still
+# resolves through the Mount by its own filename exactly as before.
+@app.get("/", include_in_schema=False)
+def serve_map() -> FileResponse:
+    return FileResponse("static/map.html")
+
+
+@app.get("/atlas", include_in_schema=False)
+def serve_atlas() -> FileResponse:
+    return FileResponse("static/atlas.html")
+
+
+# Mounted last and at "/" so it only catches paths no route above already
+# matched -- Starlette tries routes in registration order, and a Mount at "/"
+# would otherwise shadow everything if it came first.
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 

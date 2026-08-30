@@ -79,37 +79,8 @@
   color: var(--muted);
 }
 
-/* Key figures */
-
-.key-figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1rem 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  margin: 0.5rem 0;
-}
-
-.figure {
-  display: flex;
-  flex-direction: column;
-}
-
-.figure-value {
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: 1.4rem;
-  color: var(--green);
-}
-
-.figure-label {
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-}
+/* Key figures and section titles now live in style.css, shared with the
+   region map's side panel (map.html). */
 
 .commonness {
   flex-basis: 100%;
@@ -117,16 +88,6 @@
   font-family: var(--font-sans);
   font-size: 0.85rem;
   color: var(--ink);
-}
-
-/* Section title, shared by seasonality + distribution */
-
-.section-title {
-  margin: 1.5rem 0 0.5rem;
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: 1.15rem;
-  color: var(--green);
 }
 
 /* Seasonality chart */
@@ -170,174 +131,8 @@
   fill: var(--muted);
 }
 
-/* Distribution / map */
-
-.month-filter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-bottom: 0.6rem;
-}
-
-.month-btn {
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 500;
-  color: var(--muted);
-  background: var(--paper-alt);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.22rem 0.6rem;
-  cursor: pointer;
-}
-
-.month-btn:hover,
-.month-btn:focus-visible {
-  color: var(--green);
-  border-color: var(--green);
-}
-
-.month-btn.active {
-  background: var(--green);
-  border-color: var(--green);
-  color: var(--paper);
-}
-
-.region-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-bottom: 0.6rem;
-}
-
-.region-btn {
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0.22rem 0.6rem;
-  cursor: pointer;
-}
-
-.region-btn:hover,
-.region-btn:focus-visible {
-  color: var(--green);
-  border-color: var(--green);
-}
-
-.region-btn.active {
-  background: var(--green);
-  border-color: var(--green);
-  color: var(--paper);
-}
-
-/* Archipelagos are rendered as multiple side-by-side panels (island groups
-   are too far apart to share one sane frame) -- mainland is just a
-   single-panel "region" so it reuses the exact same layout, not a special
-   case. Row on wide screens, column on narrow ones (region-selector /
-   month-filter's own breakpoint below matches). */
-.map-panels {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.map-panel-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  flex: 1 1 0%;
-  min-width: 0; /* let flex children shrink below their content size */
-}
-
-.map-panel-label {
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.map-panel {
-  width: 100%;
-  height: 45vh;
-  min-height: 240px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-
-/* .map-panel, not a bare class: leaflet.css loads after species.css and its
-   own .leaflet-container rule sets a default grey background at the same
-   specificity, so a plain .map-panel background rule loses the cascade and
-   never shows without the compound selector raising specificity. Muted
-   blue-grey "sea" -- land is the light paper tone (LAND_FILL in species.js,
-   a literal color string since Leaflet needs one there, not a CSS var), so
-   land vs. sea now reads as a real, unambiguous distinction, not two shades
-   of the same paper hue. */
-.map-panel.leaflet-container {
-  background: #c2cdd2;
-}
-
-@media (min-width: 640px) {
-  .map-panels {
-    flex-direction: row;
-    align-items: stretch;
-    height: 60vh;
-    min-height: 320px;
-  }
-
-  .map-panel {
-    height: 100%;
-  }
-}
-
-.map-legend {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0.4rem 0.5rem;
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  color: var(--ink);
-  line-height: 1.5;
-}
-
-.legend-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.legend-swatch {
-  display: inline-block;
-  width: 0.7rem;
-  height: 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  flex: 0 0 auto;
-}
-
-.map-status {
-  margin: 0.5rem 0 0;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.map-popup {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  color: var(--ink);
-}
-
-.map-popup a {
-  color: var(--green);
-  font-weight: 600;
-}
+/* Month filter, region selector, and map panels/legend/popup styles now
+   live in style.css -- shared with the region map (static/map.js). */
 
 /* Wider screens */
 

@@ -1,167 +1,15 @@
-const MONTH_NAMES = {
-  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-  pt: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
-  es: ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
-};
-
-// Warm autumn sequential scale for map data (sand -> ochre -> burnt orange ->
-// deep brown). The site's own dark green (--green in style.css) stays the UI
-// color everywhere else -- this ramp is only for density fill.
-const DENSITY_COLORS = ["#f6ecd9", "#eed6a8", "#e0b370", "#cf8b42", "#a85c2a", "#6b3a1f"];
-
-// Land fill/outline for the vector basemap. Land = the site's own light
-// paper tone (matches --paper in style.css); outline = a darker shade of the
-// sea color itself (classic coastline technique), not a third unrelated hue.
-// Each panel's own blue-grey sea background lives in species.css
-// (.map-panel.leaflet-container), since that's a plain container fill, not a
-// layer Leaflet needs a JS color string for.
-const LAND_FILL = "#f6f2e7";
-const LAND_OUTLINE = "#94a3aa";
-
-// Subtle Portugal/Spain border stroke -- muted ink tone from the site
-// palette (style.css --muted), not the sea-outline color (would read as a
-// second coastline) or --accent (reserved for interactive highlights).
-const BORDER_COLOR = "#6b6357";
-
-// Mainland Iberia is its own "region" with a single panel, so it reuses the
-// exact same rendering path as the multi-panel archipelagos below rather
-// than being a special case. East edge is 4.5, not a tighter 4, specifically
-// so the Balearics (Menorca reaches lon 4.33) stay fully visible here too,
-// not just in their own archipelago panel below.
-const MAINLAND_BOUNDS = L.latLngBounds([35.5, -10], [44, 4.5]);
-
-// Every region the map can show, as a generic list of named sub-region
-// panels with bounds -- not hardcoded per archipelago. Panel bounds are
-// computed directly from static/iberia.geojson's real polygon clusters
-// (grouped by proximity, then padded), not guessed: island groups are
-// genuinely too far apart to share one sane frame (e.g. the Azores span
-// ~7 degrees of longitude across three clusters), which is also why a
-// species confined to one archipelago needs its own multi-panel view rather
-// than a single fitBounds. flex controls each panel's relative width in the
-// row layout (see species.css); unlisted defaults to 1 (equal).
-// label -> labelKey: every region/panel name shown in the UI (region-selector
-// buttons, panel headings) now resolves through static/i18n.json at render
-// time (see relabelMapUI) instead of storing literal English text -- island
-// names themselves (Flores, Corvo, Tenerife, ...) stay untranslated in every
-// language, since they're proper place names with no distinct pt/es/en
-// exonyms here, not UI prose.
-const REGIONS = [
-  {
-    id: "mainland",
-    labelKey: "region.mainland",
-    panels: [{ id: "mainland", labelKey: "region.mainland", bounds: MAINLAND_BOUNDS, flex: 1 }],
-  },
-  {
-    id: "azores",
-    labelKey: "region.azores",
-    panels: [
-      {
-        id: "azores-west",
-        labelKey: "region.azores_west_panel",
-        bounds: L.latLngBounds([39.29, -31.40], [39.81, -30.96]),
-        flex: 1,
-      },
-      {
-        id: "azores-central",
-        labelKey: "region.azores_central_panel",
-        bounds: L.latLngBounds([38.23, -28.99], [39.25, -26.89]),
-        flex: 1,
-      },
-      {
-        id: "azores-east",
-        labelKey: "region.azores_east_panel",
-        bounds: L.latLngBounds([36.78, -26.01], [38.06, -24.63]),
-        flex: 1,
-      },
-    ],
-  },
-  {
-    id: "madeira",
-    labelKey: "region.madeira",
-    panels: [
-      {
-        id: "madeira-main",
-        labelKey: "region.madeira",
-        bounds: L.latLngBounds([32.28, -17.39], [33.25, -16.16]),
-        flex: 4,
-      },
-      // Selvagens sits ~280km south of Madeira -- folding it into the main
-      // panel's bounds would triple that panel's latitude span and shrink
-      // Madeira/Porto Santo/Desertas to a sliver, so it gets its own small
-      // secondary panel instead (measured, not guessed: see the bounds gap).
-      {
-        id: "madeira-selvagens",
-        labelKey: "region.madeira_selvagens_panel",
-        bounds: L.latLngBounds([29.93, -16.15], [30.26, -15.75]),
-        flex: 1,
-      },
-    ],
-  },
-  {
-    id: "canaries",
-    labelKey: "region.canaries",
-    // All seven islands in one panel -- unlike the Azores (~7 degrees of
-    // longitude across three separated clusters) the Canaries span a more
-    // modest ~4.7 degrees end to end and are close enough to share one
-    // frame without any island shrinking to an unreadable speck.
-    panels: [
-      {
-        id: "canaries",
-        labelKey: "region.canaries_panel",
-        bounds: L.latLngBounds([27.54, -18.31], [29.39, -13.27]),
-        flex: 1,
-      },
-    ],
-  },
-  {
-    id: "balearics",
-    labelKey: "region.balearics",
-    panels: [
-      {
-        id: "balearics",
-        labelKey: "region.balearics_panel",
-        bounds: L.latLngBounds([38.54, 1.06], [40.17, 4.48]),
-        flex: 1,
-      },
-    ],
-  },
-];
-
-function findRegion(regionId) {
-  return REGIONS.find((r) => r.id === regionId) || REGIONS[0];
-}
-
-// Small padding around a region's own fitted bounds, used as maxBounds so
-// panning can wander a little beyond the tight fit without losing the
-// region entirely (see createPanelMap).
-function padBounds(bounds, factor) {
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  const latPad = (ne.lat - sw.lat) * factor;
-  const lonPad = (ne.lng - sw.lng) * factor;
-  return L.latLngBounds([sw.lat - latPad, sw.lng - lonPad], [ne.lat + latPad, ne.lng + lonPad]);
-}
-
-// Which region a lat/lon falls in, checked against every panel of every
-// region -- used only to auto-pick the initial region for a species (see
-// determineDefaultRegion), never to fitBounds a rectangle spanning regions.
-// Mainland is checked last, not in REGIONS' declared order: its bounds were
-// widened to also cover the Balearics (so they stay visible on the mainland
-// view too), which means mainland's box now geographically overlaps the
-// Balearics panel's box. Checking the more specific archipelago bounds
-// first keeps a Balearics-only species resolving to "balearics", not
-// silently absorbed into "mainland" just because that region happens to be
-// declared first.
-function regionForLatLng(lat, lon) {
-  for (const region of REGIONS) {
-    if (region.id === "mainland") continue;
-    for (const panel of region.panels) {
-      if (panel.bounds.contains([lat, lon])) return region.id;
-    }
-  }
-  if (MAINLAND_BOUNDS.contains([lat, lon])) return "mainland";
-  return null;
-}
+// MONTH_NAMES, DENSITY_COLORS, LAND_FILL/OUTLINE, BORDER_COLOR, MAINLAND_BOUNDS,
+// PANEL_GROUPS (the archipelago-framing groups, aliased below to this file's
+// pre-existing REGIONS name), findPanelGroup, padBounds, panelGroupForLatLng,
+// createPanelMap, computeLogBins/binIndexForValue, renderLegend,
+// renderCellCircles and the GBIF-link helpers all now live in
+// static/common.js (loaded before this file) -- see that file for their
+// definitions and rationale. These three aliases exist only so the rest of
+// this file, which predates the region map and its separate, administrative
+// sense of "region", doesn't need renaming throughout.
+const REGIONS = PANEL_GROUPS;
+const findRegion = findPanelGroup;
+const regionForLatLng = panelGroupForLatLng;
 
 // A species confined to (or dominated by) a single archipelago (e.g.
 // Regulus madeirensis) should open directly on that archipelago, not on an
@@ -235,7 +83,7 @@ async function init() {
       document.title = t("page.species_fallback_title", state.lang);
       showError(state.errorKey);
     } else if (state.profile) {
-      document.title = `${state.profile.gbif_name} — Nidario`;
+      document.title = `${state.profile.gbif_name} — Nidatlas`;
       renderIdentity();
       renderKeyFigures();
       renderSeasonality();
@@ -276,7 +124,7 @@ async function init() {
     return;
   }
   state.profile = profileResp;
-  document.title = `${state.profile.gbif_name} — Nidario`;
+  document.title = `${state.profile.gbif_name} — Nidatlas`;
 
   statusEl.hidden = true;
   for (const id of ["identity", "key-figures", "seasonality", "distribution"]) {
@@ -413,81 +261,11 @@ function initMonthFilter() {
 
 // --- Map ---
 //
-// Each region (mainland, or an archipelago) renders as one or more
-// side-by-side panels, each its own independent Leaflet map instance tightly
-// framed on its own sub-region -- island groups are too far apart to share
-// one frame without either shrinking the mainland to a speck or forcing a
-// rectangle that spans Morocco and half of Europe. Because each panel is a
-// genuinely separate map, cross-panel panning is architecturally impossible,
-// which is what makes "never fitBounds a rectangle spanning mainland and
-// islands" hold by construction rather than by convention.
-
-// preferCanvas: true renders every circle to a single <canvas> instead of
-// one <path> SVG node each -- on the densest species (thousands of cells)
-// the old SVG renderer had to reposition every node on every drag frame,
-// which is what caused the ~2s post-drag stall. Canvas just repaints once.
-//
-// zoomSnap: 0 makes zoom fully continuous (no snapping to any grid of
-// levels at all -- 0.25 was still discrete steps, just finer ones).
-// zoomDelta 0.1 and a much higher wheelPxPerZoomLevel mean a single scroll
-// notch or +/- click is a small, gradual nudge rather than a jump, which
-// matters at this scale where a whole default zoom level can be the
-// difference between "whole archipelago" and "one island". maxZoom raised
-// again (20 -> 24) so a single 10km cell is zoomable in much further.
-// zoomAnimation stays at Leaflet's default true -- continuous zoomSnap
-// doesn't need it disabled, and animated is what "smooth" means here.
-//
-// maxBounds fences each panel to its own region (padded a little) with
-// maxBoundsViscosity: 1.0 so panning hits a firm, immediate stop at the
-// edge instead of the elastic bounce-back a lower viscosity gives -- the
-// region should never scroll off-screen. Computed fresh from this panel's
-// own `bounds` argument every time createPanelMap runs, which is every time
-// showRegion rebuilds the panels for a newly selected view (it always tears
-// down and recreates every L.map instance first, see destroyPanelMaps), so
-// there's no stale carry-over from whatever view was showing before.
-function createPanelMap(containerEl, bounds, isArchipelago) {
-  const map = L.map(containerEl, {
-    preferCanvas: true,
-    maxZoom: 24,
-    zoomSnap: 0,
-    zoomDelta: 0.1,
-    wheelPxPerZoomLevel: 250,
-    zoomAnimation: true,
-    maxBounds: padBounds(bounds, 0.15),
-    maxBoundsViscosity: 1.0,
-  });
-
-  // Vector basemap: just the study area's countries, no surrounding tiles.
-  // interactive:false so clicks pass through to the density cells drawn on
-  // top of it, since the land fill otherwise covers the same points.
-  L.geoJSON(state.iberiaGeoJson, {
-    style: { fillColor: LAND_FILL, fillOpacity: 1, color: LAND_OUTLINE, weight: 1 },
-    interactive: false,
-  }).addTo(map);
-
-  // Portugal/Spain border only actually falls inside the mainland panel's
-  // bounds -- added to every panel anyway rather than special-cased, since
-  // Leaflet skips out-of-view geometry for free and this keeps panel
-  // creation generic.
-  L.geoJSON(state.borderGeoJson, {
-    style: { color: BORDER_COLOR, weight: 1, opacity: 0.7 },
-    interactive: false,
-  }).addTo(map);
-
-  map.fitBounds(bounds, { padding: [12, 12] });
-
-  // Archipelago panels are already the zoomed-in view of their region --
-  // zooming out below that just reveals surrounding open ocean with nothing
-  // in it, so the fitted zoom becomes the floor. Mainland stays free to zoom
-  // out (e.g. scroll-zooming past the peninsula is a reasonable thing to do
-  // on the default/overview region).
-  if (isArchipelago) {
-    map.setMinZoom(map.getZoom());
-  }
-
-  return map;
-}
-
+// Panel-map construction (createPanelMap), the panel-group model
+// (PANEL_GROUPS/REGIONS), and padBounds all live in static/common.js now --
+// see that file for the full rationale (multi-panel archipelagos, Leaflet
+// tuning, etc). destroyPanelMaps stays here since it tears down this page's
+// own state shape (state.panelMaps/circleLayers/legendControl/legendMap).
 function destroyPanelMaps() {
   for (const map of Object.values(state.panelMaps)) {
     map.remove();
@@ -510,41 +288,14 @@ function showRegion(regionId) {
   const container = document.getElementById("map-panels");
   container.innerHTML = "";
 
-  // Two passes, not one: creating and sizing a Leaflet map interleaved with
-  // appending its still-to-come sibling panels was the actual cause of the
-  // Canaries misalignment bug. A flex child's width depends on how many
-  // siblings currently exist -- so a panel built in the SAME loop iteration
-  // that appends it (before its siblings are appended) gets initialized at
-  // its temporary, too-wide single-child width. L.map() measures the
-  // container once at construction and does not re-measure on its own, so
-  // every panel but the last in a multi-panel region ended up with a pixel
-  // origin computed for a container size it no longer had once the rest of
-  // the row appeared -- circles rendered at the coordinates that stale size
-  // implied, offset from the correctly-sized visible panel underneath them.
-  // Building every container first, and only then constructing any L.map,
-  // guarantees the flex row is already at its final layout before Leaflet
-  // ever measures anything.
-  const mapEls = region.panels.map((panel) => {
-    const wrap = document.createElement("div");
-    wrap.className = "map-panel-wrap";
-    wrap.style.flexGrow = panel.flex || 1;
+  // See buildPanelDom's own comment (static/common.js) for why panel DOM is
+  // built in a separate pass before any L.map is constructed.
+  const mapEls = buildPanelDom(container, region.panels, state.lang);
 
-    const label = document.createElement("div");
-    label.className = "map-panel-label";
-    label.textContent = t(panel.labelKey, state.lang);
-    wrap.appendChild(label);
-
-    const mapEl = document.createElement("div");
-    mapEl.className = "map-panel";
-    wrap.appendChild(mapEl);
-
-    container.appendChild(wrap);
-    return mapEl;
-  });
-
-  const isArchipelago = region.id !== "mainland";
   region.panels.forEach((panel, i) => {
-    state.panelMaps[panel.id] = createPanelMap(mapEls[i], panel.bounds, isArchipelago);
+    state.panelMaps[panel.id] = createPanelMap(
+      mapEls[i], panel.bounds, state.iberiaGeoJson, state.borderGeoJson
+    );
   });
 
   document.querySelectorAll(".region-btn").forEach((btn) => {
@@ -587,130 +338,12 @@ function relabelMapUI() {
   }
 }
 
-// --- Density color scale: log bins (occurrence counts span 1 to tens of
-// thousands -- linear bins would put almost everything in the bottom bin) ---
-
-function computeLogBins(values, numBins) {
-  const positive = values.filter((v) => v > 0);
-  const min = positive.length ? Math.min(...positive) : 1;
-  const max = positive.length ? Math.max(...positive) : 1;
-  const logMin = Math.log(min);
-  const logMax = Math.log(Math.max(max, min + 1));
-
-  const edges = [];
-  for (let i = 0; i <= numBins; i++) {
-    edges.push(Math.exp(logMin + ((logMax - logMin) * i) / numBins));
-  }
-  edges[0] = min;
-  edges[numBins] = max;
-  return edges;
-}
-
-function binIndexForValue(value, edges) {
-  for (let i = 0; i < edges.length - 2; i++) {
-    if (value <= edges[i + 1]) return i;
-  }
-  return edges.length - 2;
-}
-
-// All panels share one legend rather than repeating it per panel -- attached
-// to the region's first panel only.
-function renderLegend(edges, targetMap) {
-  if (state.legendControl && state.legendMap) {
-    state.legendMap.removeControl(state.legendControl);
-  }
-  const legend = L.control({ position: "bottomright" });
-  legend.onAdd = () => {
-    const div = L.DomUtil.create("div", "map-legend");
-    for (let i = 0; i < DENSITY_COLORS.length; i++) {
-      const row = L.DomUtil.create("div", "legend-row", div);
-      const swatch = L.DomUtil.create("span", "legend-swatch", row);
-      swatch.style.background = DENSITY_COLORS[i];
-      const label = L.DomUtil.create("span", "legend-label", row);
-      const from = Math.max(1, Math.round(edges[i]));
-      const to = Math.round(edges[i + 1]);
-      label.textContent = i === DENSITY_COLORS.length - 1 ? `${from}+` : `${from}–${to}`;
-    }
-    return div;
-  };
-  legend.addTo(targetMap);
-  state.legendControl = legend;
-  state.legendMap = targetMap;
-}
-
-// Fixed radius, not data-scaled: density is conveyed entirely by color now.
-// ~6km against the 10km grid spacing means neighboring cells' circles
-// overlap a little, so adjacent color bands blend into a continuous surface
-// instead of a hard-edged tile grid.
-const CELL_CIRCLE_RADIUS_M = 6000;
-
-const METERS_PER_DEGREE_LAT = 111320;
-
-// Approximate +/-5km box around the centroid, longitude-compensated for
-// latitude (a naive fixed-degree box would be visibly non-square away from
-// the equator). This is a convenience search-link footprint, not the exact
-// MGRS cell geometry (which needs a real UTM projection to get precisely --
-// see the git history for that derivation) -- close enough for "show me
-// GBIF records near this cell", where the value is a working link, not
-// surveying-grade precision.
-function approxCellBoundsWKT(centroidLat, centroidLon) {
-  const halfLat = 5000 / METERS_PER_DEGREE_LAT;
-  const halfLon = 5000 / (METERS_PER_DEGREE_LAT * Math.cos((centroidLat * Math.PI) / 180));
-  const south = centroidLat - halfLat;
-  const north = centroidLat + halfLat;
-  const west = centroidLon - halfLon;
-  const east = centroidLon + halfLon;
-  return (
-    `POLYGON((${west} ${south}, ${east} ${south}, ${east} ${north}, ` +
-    `${west} ${north}, ${west} ${south}))`
-  );
-}
-
-// q (free-text) + geometry (WKT polygon) -- verified geometry against the
-// real GBIF API directly (api.gbif.org/v1/occurrence/search) since the
-// www.gbif.org search UI itself sits behind a bot-check that blocked
-// automated verification of its exact client-side param names. q is the
-// same field the portal's own search box uses, so it's a safe choice even
-// without that confirmation; if geometry isn't honored by the portal for
-// some reason, the link still degrades gracefully to a plain species search.
-// eventDate lower bound matches MIN_YEAR in scripts/prepare_cube.py, so the
-// live search doesn't surface pre-1990 records that our own dataset
-// deliberately excludes -- without this, GBIF's count would diverge from
-// ours for a reason unrelated to the live-vs-snapshot gap described below.
-// Bounds the live GBIF search to the same window the local occurrence cube
-// covers (MIN_YEAR in scripts/prepare_cube.py, and the cube's download date
-// per README.md's citation). This keeps the live count from drifting far
-// past what's in the popup as new sightings get uploaded to GBIF over time --
-// it can't be exact (a record can be backfilled into GBIF after our download
-// date while carrying an eventDate inside this window), but it removes the
-// main, fast-growing source of drift: brand-new observations.
-const CUBE_MIN_EVENT_DATE = "1990-01-01";
-const CUBE_DOWNLOAD_DATE = "2026-08-28";
-
-// Matches the licence filter already applied when building the local cube
-// (scripts/prepare_cube.py's species-list/occurrence downloads exclude
-// CC-BY-NC records) -- without this, GBIF's live count includes NC records
-// our own dataset never had. Verified directly against api.gbif.org: a
-// repeated license= param OR-filters (license=CC0_1_0&license=CC_BY_4_0
-// plus a CC_BY_NC_4_0-only query partition the unfiltered count exactly,
-// confirming both that these are GBIF's only three license values and that
-// the two we want are being correctly selected.
-const CUBE_LICENSES = ["CC0_1_0", "CC_BY_4_0"];
-
-function gbifSearchUrl(speciesName, centroidLat, centroidLon) {
-  const params = new URLSearchParams({
-    q: speciesName,
-    geometry: approxCellBoundsWKT(centroidLat, centroidLon),
-    eventDate: `${CUBE_MIN_EVENT_DATE},${CUBE_DOWNLOAD_DATE}`,
-  });
-  for (const license of CUBE_LICENSES) {
-    params.append("license", license);
-  }
-  return `https://www.gbif.org/occurrence/search?${params.toString()}`;
-}
-
+// computeLogBins, binIndexForValue, renderLegend, renderCellCircles,
+// gbifSearchUrl and the CELL_CIRCLE_RADIUS_M/CUBE_*/METERS_PER_DEGREE_LAT
+// constants they use all now live in static/common.js. popupHtml stays here:
+// it's species-specific (links to a GBIF search for this one species).
 function popupHtml(cell) {
-  const gbifUrl = gbifSearchUrl(state.profile.gbif_name, cell.centroid_lat, cell.centroid_lon);
+  const gbifUrl = gbifSearchUrl(cell.centroid_lat, cell.centroid_lon, { q: state.profile.gbif_name });
   const recordsText = tPlural("map.popup_records", cell.occurrences, state.lang, {
     count: cell.occurrences.toLocaleString(),
   });
@@ -720,26 +353,6 @@ function popupHtml(cell) {
     `${recordsText}<br>` +
     `<a href="${gbifUrl}">${viewLink}</a></div>`
   );
-}
-
-// Batch-add: builds every circle first and adds them to the panel in one
-// L.layerGroup rather than calling circle.addTo(map) inside the loop, so the
-// densest species (thousands of cells) triggers one insertion, not hundreds.
-function renderCirclesForPanel(panelMap, cellsInPanel, edges) {
-  const circles = cellsInPanel.map((cell) => {
-    const color = DENSITY_COLORS[binIndexForValue(cell.occurrences, edges)];
-    const circle = L.circle([cell.centroid_lat, cell.centroid_lon], {
-      radius: CELL_CIRCLE_RADIUS_M,
-      stroke: false,
-      fillColor: color,
-      fillOpacity: 0.55,
-    });
-    circle.bindPopup(popupHtml(cell));
-    return circle;
-  });
-  const group = L.layerGroup(circles);
-  group.addTo(panelMap);
-  return group;
 }
 
 // Renders state.cells into whatever panels currently exist for
@@ -783,14 +396,17 @@ function renderCellsIntoCurrentPanels() {
     const panelMap = state.panelMaps[panel.id];
     if (!panelMap) continue;
     const cellsInPanel = cells.filter((c) => panel.bounds.contains([c.centroid_lat, c.centroid_lon]));
-    state.circleLayers[panel.id] = renderCirclesForPanel(panelMap, cellsInPanel, edges);
+    state.circleLayers[panel.id] = renderCellCircles(panelMap, cellsInPanel, edges, popupHtml);
     if (cellsInPanel.length > legendHostCount) {
       legendHost = panelMap;
       legendHostCount = cellsInPanel.length;
     }
   }
 
-  if (legendHost) renderLegend(edges, legendHost);
+  if (legendHost) {
+    state.legendControl = renderLegend(edges, legendHost);
+    state.legendMap = legendHost;
+  }
 }
 
 async function loadCells(month) {
