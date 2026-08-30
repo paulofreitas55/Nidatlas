@@ -85,6 +85,8 @@ directly — everything goes through the API.
 | `species_cell_month` | `species_id`, `mgrs_cell`, `month`, `occurrences`, `family_occurrences` | Same as `species_cell` but split by calendar month (1-12), for the month-filtered distribution views. |
 | `species_month` | `species_id`, `month`, `occurrences` | Species' total occurrences per calendar month, independent of location — drives the seasonality chart on the species page. |
 | `species_year` | `species_id`, `year`, `occurrences` | Species' total occurrences per calendar year. Not currently used by any endpoint — kept for a future time-trend view. |
+| `phylo_nodes` | `id`, `ott_node_label` (UNIQUE), `name`, `ott_id`, `rank`, `parent_id`, `species_id`, `is_tip`, `depth` | One row per node (leaf or internal) in the Open Tree of Life induced subtree over the atlas's species — see `fetch_phylogeny.py`/`build_phylogeny_db.py`. `ott_node_label` is OToL's own raw Newick label, kept verbatim (`mrcaott<X>ott<Y>` for an unnamed synthesis placeholder, `<Name>_ott<id>` for a named one) since roughly 5/6 of internal nodes have no real taxon name to give. `species_id` is set only on tips that resolve to one of the 584 species; **not every species has a row here** — a handful resolve to a valid OTT taxon that OToL's synthesis doesn't sample, so they simply have no placement (see `fetch_phylogeny.py`'s report for the current list). `depth` is this node's own distance from the tree root (root = 0) — see Design decisions for why this, not `phylo_closure.depth`, is what an MRCA query sorts by. `id` is a rebuild-dependent sequential id (like `regions.id`), not stable across a refetch — never hardcode one. |
+| `phylo_closure` | `ancestor_id`, `descendant_id`, `depth` | Every ancestor/descendant pair in `phylo_nodes` (not just parent/child) — `depth` here is the number of edges from `ancestor_id` down to `descendant_id`, a different quantity from `phylo_nodes.depth` above. See Design decisions for why a closure table over nested sets or a materialized path. |
 
 All the `_month`/`_year` tables and `species_cell`/`species_cell_month` are
 **pre-aggregated from the raw cube**, not raw occurrence records — see
@@ -147,6 +149,26 @@ request time. `data/` itself is gitignored — every file in it, including
    `regions.total_occurrences`. **Requires both step 3 (DB exists) and step
    6 (`regions.geojson` exists).** Safe to rerun any time; upserts by
    `region_key`, doesn't accumulate.
+8. **`fetch_phylogeny.py`** — resolves every `species.gbif_name` against the
+   Open Tree of Life (TNRS `match_names`, restricted to `context_name:
+   "Birds"`), then fetches the induced subtree (Newick) over the resolved
+   OTT ids. A name only counts as resolved when TNRS returns exactly one
+   distinct OTT taxon; genuinely ambiguous or unmatched names are reported,
+   never guessed at, and corrected only via two small curated files this
+   script reads (not invents): `data/taxonomy_synonyms.csv` (already
+   existed for BioCLIP; OToL's taxonomy lags recent GBIF splits in the same
+   way BioCLIP's vocabulary does, so it doubles as a first retry) and the
+   OToL-only `data/ott_taxonomy_synonyms.csv` / `data/ott_ambiguous_resolutions.csv`
+   for gaps BioCLIP's file doesn't cover. All raw API responses are cached
+   under `data/opentree_*.json`, so a rerun with the same species list makes
+   zero network calls. Independent of steps 1-7 except needing `species` to
+   already exist (step 3). Safe to rerun any time; pass `--force` to refetch.
+9. **`build_phylogeny_db.py`** — parses that cached Newick and loads
+   `phylo_nodes`/`phylo_closure` (see Database schema above). **Requires
+   step 8's cached `data/opentree_induced_subtree_raw.json` and
+   `data/opentree_resolutions.json` to exist.** Safe to rerun any time;
+   always wipes and repopulates both tables from scratch rather than
+   accumulating.
 
 **`identify.py`** is not part of this pipeline — it's a standalone CLI
 (`python scripts/identify.py <image> [--species-list data/iberian_species.txt]`)
@@ -245,17 +267,52 @@ called by anything else in the repo.
   still authoritative for mainland district shapes (only GISCO has the
   internal administrative boundary lines between neighbouring districts —
   there's no OSM equivalent to swap in there).
-- **Schema duplication between `build_database.py` and
-  `assign_regions.py`.** `build_database.py`'s `SCHEMA` string is the
-  canonical definition of every table, but `assign_regions.py` carries its
-  own second copy of the `regions` table definition plus the
-  `grid_cells.region_id`/`region_name` columns (`ensure_schema()`, using
-  `CREATE TABLE IF NOT EXISTS`/`ALTER TABLE ... ADD COLUMN`) so it stays
-  safely re-runnable against a database that already has data, without
-  requiring a full rebuild first. Nothing enforces these two definitions
-  agree — if you change either table's shape in `build_database.py`, you
-  must update `ensure_schema()` in `assign_regions.py` to match by hand, or
-  the two will silently drift apart.
+- **Schema duplication between `build_database.py` and both
+  `assign_regions.py` and `build_phylogeny_db.py`.** `build_database.py`'s
+  `SCHEMA` string is the canonical definition of every table, but both of
+  the other two scripts carry their own second copy of the tables they
+  populate (`regions`/`grid_cells.region_id`/`region_name` for the former,
+  `phylo_nodes`/`phylo_closure` for the latter) behind an `ensure_schema()`
+  using `CREATE TABLE IF NOT EXISTS`/`ALTER TABLE ... ADD COLUMN`, so each
+  stays safely re-runnable against a database that already has real data,
+  without requiring a full `build_database.py` rebuild first (which would
+  also throw away the other one's populated data). Nothing enforces these
+  definitions agree — if you change a table's shape in `build_database.py`,
+  you must update the matching `ensure_schema()` by hand in whichever
+  script(s) also touch that table, or they will silently drift apart.
+- **Phylogeny storage: adjacency list + closure table, not nested sets or a
+  materialized path** (`phylo_nodes.parent_id` + `phylo_closure`). Chosen
+  against the four query patterns `src/queries.py`'s `phylo_*` functions
+  support: MRCA-of-two-species is the deciding one — one indexed self-join
+  on `phylo_closure` (common ancestors of both, take the one with the
+  greatest `phylo_nodes.depth`) matches this project's plain-SQL style,
+  where nested sets would need range-containment logic and a materialized
+  path would need longest-common-prefix logic. Descendants-of-a-node and
+  closest-relatives both reduce to a single indexed range scan on
+  `phylo_closure`; subtree rendering uses `phylo_nodes.parent_id` directly
+  since a closure table alone can't reconstruct topology. The tree is tiny
+  (~2,600 nodes) and, like `grid_cells`/`regions`, is rebuilt from scratch
+  every pipeline run rather than mutated live, so the closure table's usual
+  weakness (expensive to keep in sync under inserts) never applies — same
+  precompute-once, serve-cheaply pattern already used for
+  `regions.total_occurrences`. **Do not confuse `phylo_nodes.depth`**
+  (a node's own distance from the tree root) **with `phylo_closure.depth`**
+  (the distance from one specific ancestor down to one specific
+  descendant) — MRCA needs the former; using the latter by mistake silently
+  returns the tree ROOT as the "closest" common ancestor for any pair
+  instead of their actual most specific one (caught during this feature's
+  own testing, not theoretical — see `phylo_mrca` in `src/queries.py`).
+- **Not every species has a phylogeny placement.** Of the 584 species, 577
+  resolve to a distinct node in the current Open Tree synthesis
+  (`opentree16.1`); 7 resolve cleanly to a real, valid OTT taxon that no
+  input phylogeny happens to sample, so OToL's `induced_subtree` endpoint
+  either folds them into an ancestor placeholder or (for one, flagged
+  `"hidden"` in OToL's own taxonomy) refuses the id outright. This is a
+  genuine, disclosed gap in Open Tree's current data, not a fetch bug —
+  `phylo_closest_relatives`/`phylo_mrca` treat "species exists but has no
+  tree placement" as a valid non-error outcome (empty list / a clearly
+  labeled `ValueError`), never a guessed-at placement. See
+  `fetch_phylogeny.py`'s own report (rerun it) for the current, exact list.
 
 ## Conventions
 
@@ -291,22 +348,31 @@ called by anything else in the repo.
 ## Current state
 
 **Done:** the full data pipeline (species list → cube → SQLite →
-vernacular names → administrative regions), the query layer and FastAPI
-backend with a 29-test pytest suite, and all three frontend pages (region
-map landing page, species atlas grid, species detail page) fully
+vernacular names → administrative regions → phylogeny), the query layer and
+FastAPI backend with a 39-test pytest suite, and all three frontend pages
+(region map landing page, species atlas grid, species detail page) fully
 implemented and localized in pt/es/en with shared top-level MAP/ATLAS
 navigation. The BioCLIP 2 identification script works standalone but is
 **not yet wired into the web app** — there is no upload-a-photo flow in the
 UI yet, despite the README's original description mentioning one.
+Phylogeny is data-and-API-only so far: 577/584 species are placed in an
+Open Tree of Life-derived tree stored in `phylo_nodes`/`phylo_closure`,
+with `src/queries.py` functions for all four query patterns (closest
+relatives, MRCA, descendants-of-a-node, subtree rendering) and two of them
+exposed as endpoints (`/api/species/{id}/relatives`,
+`/api/phylo/{node_id}/subtree`) — but no frontend tree view consumes them
+yet (see **Next** below).
 
 **In progress:** nothing actively broken. As of this file's writing, a
 substantial amount of work (the entire region map, the concentration-ratio
-ranking change, and this rename) is complete and passing tests but **not
-yet committed to git** — run `git status` before assuming the working tree
-matches the last commit.
+ranking change, this rename, and the phylogeny data/query layer) is
+complete and passing tests but **not yet committed to git** — run `git
+status` before assuming the working tree matches the last commit.
 
 **Next** (not yet started):
-- A phylogenetic tree view of the species list.
+- The actual phylogenetic tree *view* in the UI — the data and query layer
+  behind it are done (see **Done** above), but nothing in `static/` renders
+  it yet.
 - Species description text and real photos (every species card currently
   shows a placeholder thumbnail; there is no description field anywhere).
 - A private user sightings log — letting a user record their own
@@ -350,6 +416,6 @@ python -m pytest tests/test_api.py -q
 ```
 
 Requires `data/nidatlas.db` to exist and be fully built (species +
-regions + grid_cells assignment all populated) — the test suite hits the
-real FastAPI app against the real local database, not a mock. 29 tests,
-should all pass on a correctly rebuilt database.
+regions + grid_cells assignment + phylogeny all populated) — the test suite
+hits the real FastAPI app against the real local database, not a mock. 39
+tests, should all pass on a correctly rebuilt database.

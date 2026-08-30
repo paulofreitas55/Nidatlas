@@ -105,6 +105,53 @@ CREATE TABLE species_year (
     occurrences INTEGER NOT NULL,
     PRIMARY KEY (species_id, year)
 );
+
+-- Phylogenetic tree from the Open Tree of Life (see scripts/fetch_phylogeny.py
+-- and scripts/build_phylogeny_db.py). Populated later, same reason as
+-- regions/grid_cells above: defined here so nothing else has to guess at
+-- the shape, but this script has no OToL data of its own to load into it.
+-- One row per Newick node (leaf or internal) in the induced subtree.
+-- ott_node_label is OToL's own raw label as it appears in the Newick
+-- (e.g. "mrcaott817627ott3599091" for an unnamed synthesis node,
+-- "Certhia_ott467879" for a named one) -- kept verbatim so nothing is
+-- invented for the ~half of internal nodes OToL itself never named.
+CREATE TABLE phylo_nodes (
+    id INTEGER PRIMARY KEY,
+    ott_node_label TEXT NOT NULL UNIQUE,
+    name TEXT,
+    ott_id INTEGER,
+    rank TEXT,
+    parent_id INTEGER REFERENCES phylo_nodes(id),
+    species_id INTEGER REFERENCES species(id),
+    is_tip INTEGER NOT NULL,
+    -- This node's OWN depth from the root (root = 0), NOT to be confused
+    -- with phylo_closure.depth below (which is the distance from a given
+    -- ANCESTOR down to a given DESCENDANT). MRCA-of-two-nodes needs this
+    -- column: among nodes that are a common ancestor of both, the most
+    -- recent one is the one with the GREATEST depth here (deepest from
+    -- root = most specific), not the smallest phylo_closure.depth (which
+    -- only measures distance to one side and would wrongly favor whichever
+    -- candidate happens to sit right above one of the two query nodes).
+    depth INTEGER NOT NULL
+);
+
+-- Closure (every ancestor/descendant pair, not just parent/child) over
+-- phylo_nodes -- see build_phylogeny_db.py's module docstring for why this
+-- shape was chosen over nested sets or a materialized path.
+CREATE TABLE phylo_closure (
+    ancestor_id INTEGER NOT NULL REFERENCES phylo_nodes(id),
+    descendant_id INTEGER NOT NULL REFERENCES phylo_nodes(id),
+    depth INTEGER NOT NULL,
+    PRIMARY KEY (ancestor_id, descendant_id)
+);
+
+-- phylo_closure's own PRIMARY KEY already indexes (ancestor_id, descendant_id)
+-- for "descendants of this node" -- this covers the reverse ("ancestors of
+-- this node", i.e. MRCA lookups) and phylo_nodes.parent_id covers "children
+-- of this node" (subtree rendering), neither of which the PK helps with.
+CREATE INDEX idx_phylo_closure_descendant ON phylo_closure(descendant_id);
+CREATE INDEX idx_phylo_nodes_parent ON phylo_nodes(parent_id);
+CREATE INDEX idx_phylo_nodes_species ON phylo_nodes(species_id);
 """
 
 
