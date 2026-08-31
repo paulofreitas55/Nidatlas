@@ -113,6 +113,27 @@ function renderFooter(lang) {
   }
 }
 
+// --- Runtime feature flags ---
+//
+// GET /api/config reports what THIS deployment has enabled server-side --
+// there's no build step to bake this into the static HTML, and the IDENTIFY
+// nav link/page must not appear (see CLAUDE.md's "IDENTIFY feature
+// isolation" design decision) when the backend has the feature off, so
+// every page checks this once at load. Failure (offline, old cached HTML
+// against a newer/older API) just leaves the link hidden -- the safer
+// default, since /identify itself 404s when the feature is off anyway.
+async function applyFeatureFlags() {
+  try {
+    const response = await fetch("/api/config");
+    const config = await response.json();
+    document.querySelectorAll(".nav-identify-link").forEach((el) => {
+      el.hidden = !config.identify_enabled;
+    });
+  } catch (err) {
+    // leave nav-identify-link(s) hidden
+  }
+}
+
 // Wires up every .lang-btn on the page, restores the saved/detected language,
 // and calls onChange(lang) whenever the user picks a different one. Returns
 // the initial language so the caller can use it before onChange ever fires.

@@ -14,8 +14,12 @@ on GBIF occurrence data. It lets people browse an illustrated species list,
 see a species' seasonal and geographic distribution down to a 10km grid
 cell, and explore an administrative-region choropleth map showing which
 species are most and least characteristic of a given district, province or
-island. A BioCLIP 2-based photo identification script exists as a
-standalone CLI tool; it is not yet wired into the web app.
+island. A BioCLIP 2-based photo identification feature lets a visitor
+upload or capture a photo and get the model's top-5 guesses among Iberia's
+584 species. It's an optional add-on, not a hard dependency of the rest of
+the app (see the `identify` sections below and this file's "IDENTIFY
+feature isolation" design decision) — a deployment can still run without
+the ~1.7GB of model weights and PyTorch if it doesn't want that feature.
 
 ## Architecture
 
@@ -36,15 +40,36 @@ prints a few real queries to the console.
 **API** (`src/api.py`): a thin FastAPI layer over `queries.py`. Each route
 handler is a few lines: call the matching query function, translate
 `ValueError` (not-found) into a 404. Also serves the static frontend
-directly (`StaticFiles` mounted at `/`, with two explicit routes for `/` and
-`/atlas` since a same-directory HTML file under a different name needs an
-explicit route — `StaticFiles(html=True)` only auto-serves `index.html`).
-Runs a `no-store` `Cache-Control` middleware on every response — this is a
-local/dev-oriented choice (see the comment in `api.py`), revisit before a
-real public deployment where you'd want real caching back.
+directly (`StaticFiles` mounted at `/`, with explicit routes for `/`,
+`/atlas`, `/tree`, `/rank` and (when enabled) `/identify`, since a
+same-directory HTML file under a different name needs an explicit route —
+`StaticFiles(html=True)` only auto-serves `index.html`). Runs a `no-store`
+`Cache-Control` middleware on every response — this is a local/dev-oriented
+choice (see the comment in `api.py`), revisit before a real public
+deployment where you'd want real caching back. `GET /api/config` reports
+`{"identify_enabled": bool}` so the static frontend can decide at runtime
+whether to show the IDENTIFY nav link/page (see below). `POST /api/identify`
+(only registered when `ENABLE_IDENTIFY` is set — see "IDENTIFY feature
+isolation" in Design decisions) accepts a multipart image upload
+(+ optional `lat`/`lon`, accepted but not yet used to affect the result),
+enforces a max file size and an allowed-MIME-type list, rate-limits by
+client IP (a simple in-process sliding-window counter — no new dependency;
+see the comment above it in `api.py`), and delegates to `src/identification.py`.
+
+**Identification** (`src/identification.py`): the web-facing counterpart to
+`scripts/identify.py`'s CLI, both restricted to Iberia's 584 species (see
+"BioCLIP's label space restricted to Iberian species" below). Classifies an
+in-memory image (never written to disk) and returns up to 5 candidates with
+confidence scores; `api.py` then maps each candidate's `bioclip_name` back
+to a species row via `queries.species_by_bioclip_names`. Deliberately keeps
+every `torch`/`bioclip`/PIL import lazy, inside the functions that actually
+need them, so importing this module — which `api.py` does unconditionally —
+never requires those packages to be installed; see "IDENTIFY feature
+isolation" in Design decisions for the full reasoning and how this combines
+with `ENABLE_IDENTIFY` end to end.
 
 **Frontend** (`static/`, no build step, no framework, no bundler — plain
-`<script>` tags): five pages sharing common CSS/JS.
+`<script>` tags): six pages sharing common CSS/JS.
 - `map.html` + `map.css` + `map.js` — the landing page (served at `/`). The
   97-region choropleth, shaded by total occurrences, with an archipelago
   panel selector and a side panel showing per-region species rankings.
@@ -74,6 +99,33 @@ real public deployment where you'd want real caching back.
   search box (`rank-full-search`) that filters that one list in place —
   separate from the top/bottom-50 default view, which has no search of its
   own since 50 rows needs no filtering aid.
+- `identify.html` + `identify.css` + `identify.js` — served at `/identify`,
+  but only when the backend has `ENABLE_IDENTIFY` set (see "IDENTIFY
+  feature isolation" in Design decisions); the nav link to it
+  (`.nav-identify-link`, present but `hidden` in every page's markup) is
+  un-hidden by `applyFeatureFlags()` in `lang.js` (called from every page's
+  own `init()`) only after `GET /api/config` confirms the feature is on.
+  Upload a photo or take one with the device camera (two plain
+  `<input type=file>` elements, one with `capture="environment"` as a
+  camera hint — no `getUserMedia`/live video preview, kept deliberately
+  simple), optionally attach the browser's geolocation (opt-in via a
+  button, never automatic), and POST to `/api/identify`. Mobile-first CSS
+  (this is the view most likely used outdoors, camera in hand). Renders
+  results one of two ways depending on the response's `confident` flag,
+  never both: a real candidate list (thumbnail via the shared
+  `buildPhotoThumb`/`buildPhotoCredit` from `lang.js`, a confidence bar,
+  link to the species page) when the top score cleared
+  `identification.CONFIDENCE_THRESHOLD` server-side, or a plain-text,
+  visually de-emphasized, collapsed-by-default list behind a "show
+  low-confidence guesses anyway" `<details>` otherwise — see "IDENTIFY
+  confidence threshold" in Design decisions for why presenting a
+  low-confidence result as if it were a real answer would be dishonest, and
+  why a wide empirical gap makes that distinction safe to draw
+  automatically instead of leaving it to the user to judge from the number
+  alone. A persistent disclaimer (never conditionally hidden) states both
+  that results come from an AI model and may be wrong, and that the model
+  can only name one of the 584 Iberian species even when the photo is of
+  something else entirely.
 - `cladogram.js` — the shared rectangular-cladogram SVG renderer behind both
   `tree.js` and `species.js`'s tree section: given a small node graph (id,
   children, label, tip/clickable/muted flags), it lays out and draws it,
@@ -88,9 +140,10 @@ real public deployment where you'd want real caching back.
   lookup, and the declarative `data-i18n*` attribute binder. Loaded by every
   page before its own script.
 - `style.css` — shared header, footer, card, map-panel, and cladogram
-  (`.cladogram-*`) styles across all five pages. `species.css`/`map.css`/
-  `tree.css`/`rank.css` hold only what's specific to that one page — check
-  `style.css` first before assuming a rule needs to be added per-page.
+  (`.cladogram-*`) styles across all six pages. `species.css`/`map.css`/
+  `tree.css`/`rank.css`/`identify.css` hold only what's specific to that one
+  page — check `style.css` first before assuming a rule needs to be added
+  per-page.
 - `i18n.json` — every UI string in the app, keyed by dotted key
   (`"page.title": {"en": ..., "pt": ..., "es": ...}`). See Conventions.
 
@@ -256,22 +309,22 @@ request time. `data/` itself is gitignored — every file in it, including
     but also an identifiable person's face — see "Candidate-photo
     screening" in Design decisions for the fix and
     `data/image_overrides.csv` below for the manual escape hatch used
-    alongside it. Populates `species.image_*` (see Database schema above).
-    Independent of steps 5-9 except needing `species` to already exist
-    (step 3). Every API response is cached under `data/`
-    (`inat_taxa_raw.json`, `inat_observations_raw.json` — filtered before
-    caching, NOT the raw response, see Design decisions —
+    alongside it. Populates `species.image_*` (see
+    Database schema above). Independent of steps 5-9 except needing
+    `species` to already exist (step 3). Every API response is cached under
+    `data/` (`inat_taxa_raw.json`, `inat_observations_raw.json` — filtered
+    before caching, NOT the raw response, see Design decisions —
     `inat_observation_overrides_raw.json`, `wikidata_images_raw.json`,
     `commons_metadata_raw.json`), keyed by the exact query used, so a rerun
-    only fetches names/ids not already tried — safe to rerun any time, or
-    pass `--force` to refetch everything, or `--refetch-species-file
-    <path>` (one `gbif_name` per line) to reprocess just a named subset,
-    excluding each one's current iNaturalist observation so a genuinely
-    different photo is picked (used for the 40-species remediation above;
-    see that flag's own `--help` text). See Design decisions for the
-    cascade order, the CC-BY-SA exclusion, the hotlinking decision, and two
-    real bugs caught building this (a search-endpoint false negative, and
-    the observations-cache size blowup).
+    only fetches names/ids not already tried — safe to rerun any time; pass
+    `--force` to refetch everything, or `--refetch-species-file <path>` (one
+    `gbif_name` per line) to reprocess just a named subset, excluding each
+    one's current iNaturalist observation so a genuinely different photo is
+    picked (used for the 40-species remediation above; see that flag's own
+    `--help` text). See Design decisions for the cascade order, the CC-BY-SA
+    exclusion, the hotlinking decision, and two real bugs caught building
+    this (a search-endpoint false negative, and the observations-cache size
+    blowup).
 
     **`data/image_overrides.csv`** (`gbif_name,source,inat_observation_id,
     inat_photo_id,commons_filename,note`) lets a human pin one specific
@@ -283,10 +336,9 @@ request time. `data/` itself is gitignored — every file in it, including
     `commons_filename`, e.g. `Some_bird.jpg`, no `File:` prefix). Tracked in
     git despite living under `data/` (see Conventions' curated-files list) —
     not pre-populated with guesses, a human adds a row only after actually
-    checking the candidate photo. Currently holds the 4 species fixed by
-    hand during the 40-species remediation (2 dead/toy-screen escapes, 2
-    identifiable-person escapes — see Design decisions); use it for
-    whichever future species still doesn't look right after review.
+    checking the candidate photo. Currently empty (header row only); use it
+    for whichever of the 40 remediated species (or any future one) still
+    doesn't look right after review.
 
 **`identify.py`** is not part of this pipeline — it's a standalone CLI
 (`python scripts/identify.py <image> [--species-list data/iberian_species.txt]`)
@@ -341,12 +393,58 @@ called by anything else in the repo.
 - **BioCLIP's label space restricted to Iberian species.**
   `TreeOfLifeClassifier`'s default vocabulary spans the entire tree of
   life — every organism it was trained on, not just birds, not just
-  Iberian ones. `scripts/identify.py --species-list` calls
-  `create_taxa_filter` + `apply_filter` to restrict predictions to the
-  ~584-species list this atlas actually covers, which improves both
-  accuracy (far less chance of confusion with an unrelated global species)
-  and interpretability (every prediction is guaranteed relevant to what the
-  atlas documents).
+  Iberian ones. Both `scripts/identify.py --species-list` (the CLI) and
+  `src/identification.py`'s `_get_classifier()` (the `/api/identify`
+  endpoint) call `create_taxa_filter` + `apply_filter` to restrict
+  predictions to the ~584-species list this atlas actually covers, which
+  improves both accuracy (far less chance of confusion with an unrelated
+  global species) and interpretability (every prediction is guaranteed
+  relevant to what the atlas documents).
+- **IDENTIFY feature isolation: the model layer is importable without being
+  loadable.** The feature adds ~1.7GB of model weights plus PyTorch, which
+  affects container image size, cold start and memory — a deployment that
+  doesn't want that cost must be able to run without it, not merely
+  "without using" it. Two independent mechanisms, deliberately layered
+  rather than relying on either alone: (1) `src/identification.py` never
+  imports `torch`/`bioclip`/PIL at module level — every such import is
+  lazy, inside `_get_classifier()`/`classify_image_bytes()` — so `api.py`
+  can import this module unconditionally with zero cost when those
+  packages aren't installed at all; (2) `api.py` reads `ENABLE_IDENTIFY`
+  from the environment once at import time and only registers
+  `POST /api/identify` and `GET /identify` inside `if ENABLE_IDENTIFY:`, so
+  with the flag unset those heavy-import functions are never even called,
+  and the routes genuinely don't exist (a request gets a plain 404, not a
+  500 from a missing package). The frontend mirrors this at the UI layer:
+  every page's nav link to `/identify` (`.nav-identify-link`) starts
+  `hidden` in the static HTML and is only revealed by `applyFeatureFlags()`
+  in `lang.js` after `GET /api/config` confirms `identify_enabled` — so a
+  deployment with the feature off shows no trace of it, not just a
+  disabled/broken-looking button. `requirements.txt` still lists
+  `pybioclip` unconditionally today (it's also needed by the offline
+  `scripts/identify.py` and `build_species_list.py`); splitting it into an
+  optional/extra dependency group is Azure-deployment work (see Current
+  state's Next list), not needed until there's an actual Dockerfile to
+  make lean.
+- **IDENTIFY confidence threshold: 0.5, chosen from a direct measurement,
+  not a guess.** Under the same Iberian-restricted classifier, 5 real
+  Iberian species photos (blackbird, house sparrow, serin, blackcap, white
+  stork) scored between 0.956 and 0.998 top-1 confidence. Four images the
+  classifier should NOT be confident about — a non-Iberian bird (an Emperor
+  Penguin, fetched from iNaturalist, forced to pick among only Iberian
+  species since the filter can't return anything else), a domestic cat, a
+  screenshot of this app's own UI, and a random-noise image — scored
+  between 0.14 and 0.36. `CONFIDENCE_THRESHOLD = 0.5` in
+  `identification.py` sits in the wide gap between those two clusters, so
+  `classify_image_bytes()`'s `confident` flag is a genuine signal, not an
+  arbitrary cutoff. This directly drives the frontend's honesty
+  requirement (see `identify.html`/`identify.js` above): a low-confidence
+  result is shown as "could not identify with confidence", with the raw
+  candidates available only behind an explicit, viscerally
+  de-emphasized "show anyway" disclosure — never presented as a ranked
+  answer the way a confident result is. Re-measure before changing this
+  threshold if the classifier, its species list, or its restriction filter
+  ever change materially (see the same "Explain before accepting on schema
+  changes" convention this project already applies elsewhere).
 - **`data/taxonomy_synonyms.csv`.** GBIF's current taxonomic backbone and
   BioCLIP 2's internal vocabulary disagree on naming for a number of
   species — recent genus splits, spelling variants. This CSV maps GBIF's
@@ -710,24 +808,27 @@ called by anything else in the repo.
 
 **Done:** the full data pipeline (species list → cube → SQLite →
 vernacular names → administrative regions → phylogeny → species photos),
-the query layer and FastAPI backend with a 46-test pytest suite, and all
-five frontend pages (region map landing page, species atlas grid, species
-detail page, tree of life view, occurrence-count ranking) fully implemented
-and localized in pt/es/en with shared top-level MAP/ATLAS/TREE/RANK
-navigation. Every species now has a real, commercially-usable, attributed
-photo (584/584 — see the "Species photo cascade" design decision) shown on
-its atlas card, its own page and the rank lists; a manual review afterward
-found 40 species with an unsuitable (dead-specimen/taxidermy/toy) photo
-and, in a later visual pass, 2 more with an identifiable person's face (a
-child's, in one case) prominently in frame — all now both screened against
-automatically going forward (`observation_is_suspect()`, covering
-dead-specimen/taxidermy/toy AND identifiable-person cases) and fixable by
-hand via `data/image_overrides.csv` — see the "Candidate-photo screening"
-design decision. The BioCLIP 2
-identification script
-works standalone but is **not yet wired into the web app** — there is no
-upload-a-photo flow in the UI yet, despite the README's original
-description mentioning one. Phylogeny specifically: 577/584 species are
+the query layer and FastAPI backend with a 50-test pytest suite, and all
+six frontend pages (region map landing page, species atlas grid, species
+detail page, tree of life view, occurrence-count ranking, photo
+identification) fully implemented and localized in pt/es/en with shared
+top-level MAP/ATLAS/TREE/RANK/IDENTIFY navigation. Every species now has a
+real, commercially-usable, attributed photo (584/584 — see the "Species
+photo cascade" design decision) shown on its atlas card, its own page and
+the rank lists; a manual review afterward found 40 species with an
+unsuitable (dead-specimen/taxidermy/toy) photo and, in a later visual pass,
+2 more with an identifiable person's face (a child's, in one case)
+prominently in frame — all now both screened against automatically going
+forward (`observation_is_suspect()`, covering dead-specimen/taxidermy/toy
+AND identifiable-person cases) and fixable by hand via
+`data/image_overrides.csv` — see the "Candidate-photo screening" design
+decision. BioCLIP 2 identification is wired into the web app as the
+IDENTIFY view (`POST /api/identify`, `static/identify.html`), sharing its
+Iberian-species restriction with the standalone `scripts/identify.py` CLI,
+gated end-to-end behind `ENABLE_IDENTIFY` so a deployment can still run
+without the model/PyTorch installed at all — see "IDENTIFY feature
+isolation" and "IDENTIFY confidence threshold" in Design decisions.
+Phylogeny specifically: 577/584 species are
 placed in an Open Tree of Life-derived tree stored in
 `phylo_nodes`/`phylo_closure`, with `src/queries.py` functions for all four
 query patterns (closest relatives, MRCA, descendants-of-a-node, subtree
@@ -746,23 +847,19 @@ and passing tests but **not yet committed to git** — run `git status`
 before assuming the working tree matches the last commit.
 
 **Next** (not yet started, roughly in this order):
-1. **Wire BioCLIP 2 into the web app.** `scripts/identify.py` works
-   standalone from the command line but there is no upload-a-photo flow in
-   the UI — no endpoint accepts an image, no page has an upload control.
-   This is the most-mentioned gap in this file (see "What this is" and
-   "Done" above) and the natural next feature, since the model, the
-   Iberian-species label filter, and now real reference photos per species
-   all already exist independently.
-2. **Azure deployment.** Docker, GitHub Actions CI/CD, and picking an
+1. **Azure deployment.** Docker, GitHub Actions CI/CD, and picking an
    actual Azure hosting target. Nothing in the repo currently deploys
    anywhere; everything described above runs locally only. Also the point
    at which `src/api.py`'s `no-store` `Cache-Control` middleware (a
    local-dev convenience — see Architecture above) needs revisiting for
-   real caching.
-3. Species description text — real photos are now wired in (see
+   real caching, and at which `requirements.txt` would actually benefit
+   from splitting `pybioclip`/PyTorch into an optional extra now that
+   ENABLE_IDENTIFY makes that split meaningful for a lightweight
+   container (see "IDENTIFY feature isolation" in Design decisions).
+2. Species description text — real photos are now wired in (see
    `fetch_species_images.py` / the "Species photo cascade" design
    decision), but there is still no descriptive text field anywhere.
-4. A private user sightings log — letting a user record their own
+3. A private user sightings log — letting a user record their own
    observations, geographically. This was part of the *original* product
    vision (see README's earlier drafts) but has no schema, endpoint, or UI
    yet, and would need real auth/user-identity design first.
@@ -793,13 +890,35 @@ species list. Static files are served with `Cache-Control: no-store`, so a
 plain reload always reflects the latest files on disk — no need to hard-refresh
 during development.
 
+The IDENTIFY view is off by default. To turn it on, `pip install
+pybioclip` (already in `requirements.txt`) and set `ENABLE_IDENTIFY=1`
+before starting the server:
+
+```powershell
+$env:ENABLE_IDENTIFY = "1"
+python src/api.py
+```
+
+With the flag unset (or any value other than `1`/`true`/`yes`), the app
+runs exactly as before — no IDENTIFY nav link, `/identify` and
+`/api/identify` don't exist, and nothing in `src/identification.py`'s heavy
+imports ever gets touched — see "IDENTIFY feature isolation" in Design
+decisions.
+
 ## Tests
 
 ```powershell
-python -m pytest tests/test_api.py -q
+python -m pytest tests/ -q
 ```
 
 Requires `data/nidatlas.db` to exist and be fully built (species +
 regions + grid_cells assignment + phylogeny all populated) — the test suite
-hits the real FastAPI app against the real local database, not a mock. 46
-tests, should all pass on a correctly rebuilt database.
+hits the real FastAPI app against the real local database, not a mock. 50
+tests, should all pass on a correctly rebuilt database. `tests/conftest.py`
+sets `ENABLE_IDENTIFY=1` before any test module imports `src/api.py` (that
+flag is read once at import time — see "IDENTIFY feature isolation" in
+Design decisions), so `tests/test_identify.py`'s routes exist regardless of
+which test file pytest happens to import `api` from first;
+`tests/test_identify.py` mocks `identification.classify_image_bytes`
+itself, so the suite never loads the real model and doesn't need
+`pybioclip`/PyTorch installed to run.

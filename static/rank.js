@@ -38,6 +38,7 @@ async function init() {
   document.title = t("page.rank_title", state.lang);
   applyStaticTranslations(state.lang);
   renderFooter(state.lang);
+  applyFeatureFlags();
 
   try {
     const response = await fetch("/api/species/ranking");

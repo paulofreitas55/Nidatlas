@@ -577,6 +577,44 @@ def search_species(conn: sqlite3.Connection, text: str) -> list[dict]:
     ]
 
 
+def species_by_bioclip_names(conn: sqlite3.Connection, bioclip_names: list[str]) -> dict[str, dict]:
+    # Used only by the /api/identify endpoint (see src/identification.py) to
+    # map BioCLIP 2's own prediction labels back to a species row -- those
+    # labels are exactly species.bioclip_name (build_species_list.py wrote
+    # both from the same taxonomy_synonyms.csv-resolved name), never
+    # gbif_name directly, so this looks up by that column specifically.
+    # Keyed by bioclip_name (not a list) since a caller has several
+    # predictions to resolve at once and needs each one back by that name.
+    if not bioclip_names:
+        return {}
+    placeholders = ",".join("?" * len(bioclip_names))
+    rows = conn.execute(
+        f"""
+        SELECT id, gbif_name, bioclip_name, common_name_pt, common_name_es, common_name_en,
+               image_url, image_source, image_license, image_attribution, image_source_url
+        FROM species
+        WHERE bioclip_name IN ({placeholders})
+        """,
+        bioclip_names,
+    ).fetchall()
+    return {
+        bioclip_name: {
+            "id": sid,
+            "gbif_name": gbif_name,
+            "common_name_pt": pt,
+            "common_name_es": es,
+            "common_name_en": en,
+            "image_url": image_url,
+            "image_source": image_source,
+            "image_license": image_license,
+            "image_attribution": image_attribution,
+            "image_source_url": image_source_url,
+        }
+        for sid, gbif_name, bioclip_name, pt, es, en,
+            image_url, image_source, image_license, image_attribution, image_source_url in rows
+    }
+
+
 # --- Phylogeny (data/nidatlas.db's phylo_nodes/phylo_closure -- see
 # scripts/fetch_phylogeny.py and scripts/build_phylogeny_db.py for how these
 # are populated, and that second script's module docstring for why an

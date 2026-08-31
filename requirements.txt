@@ -7,5 +7,6 @@ pybioclip
 pyshp
 pytest
 pyproj
+python-multipart
 shapely
 uvicorn[standard]

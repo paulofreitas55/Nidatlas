@@ -23,14 +23,32 @@ on public GBIF occurrence data.
 - **Rank** — every species ordered by raw recorded-occurrence count, most
   and least, clearly labelled as observation records rather than actual
   abundance (see the Region map for relative commonness by area).
+- **Identify** — upload or take a photo of a bird and get the model's top-5
+  guesses among Iberia's 584 species, each linked to its species page, with
+  a confidence score and an explicit "not confident" state rather than a
+  false-certain answer. An optional feature (see below) — off by default so
+  a deployment isn't forced to carry the ~1.7GB of model weights.
 - Fully localised in **Portuguese, Spanish and English**.
 
-A BioCLIP 2-based photo identification script (`scripts/identify.py`)
-exists and works standalone from the command line, but is not yet wired
-into the web app — uploading a photo through the site isn't possible yet.
-See [CLAUDE.md](CLAUDE.md)'s "Current state" section for what's built vs.
-planned (species description text, a personal sightings log, and
-deployment are the next pieces of work).
+Species identification also ships as a standalone CLI (`scripts/identify.py`),
+usable without running the web app at all. See [CLAUDE.md](CLAUDE.md)'s
+"Current state" section for what's built vs. planned (species description
+text, a personal sightings log, and deployment are the next pieces of
+work).
+
+### Enabling photo identification
+
+The IDENTIFY view is off by default — the app runs as a lightweight
+container without it. To turn it on:
+
+```powershell
+pip install pybioclip   # already in requirements.txt
+$env:ENABLE_IDENTIFY = "1"
+python src/api.py
+```
+
+See CLAUDE.md's "IDENTIFY feature isolation" design decision for how this
+gating works end to end (backend routes, frontend nav, lazy model import).
 
 ### Photo credits
 
@@ -74,7 +92,7 @@ python src/api.py
 Serves at `http://127.0.0.1:8000/`. Run the tests with:
 
 ```powershell
-python -m pytest tests/test_api.py -q
+python -m pytest tests/ -q
 ```
 
 ## Data sources

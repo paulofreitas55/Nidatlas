@@ -23,6 +23,7 @@ async function init() {
   }
 
   const lang = initLangSwitch((newLang) => applyLang(newLang));
+  applyFeatureFlags();
   buildQuickNav(state.all);
   applyLang(lang);
   document.getElementById("search-box").addEventListener("input", applyFilterAndRender);

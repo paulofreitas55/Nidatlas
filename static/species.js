@@ -108,6 +108,7 @@ async function init() {
   document.title = t("page.species_fallback_title", state.lang); // real species name replaces this once loaded
   applyStaticTranslations(state.lang);
   renderFooter(state.lang);
+  applyFeatureFlags();
 
   if (!state.id) {
     showError("species.error_no_id");

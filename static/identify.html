@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Identify — Nidatlas</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="identify.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark"><a href="/">Nidatlas</a></h1>
+        <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+    <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
+      <a href="/" class="top-nav-link" data-i18n="nav.map">Map</a>
+      <a href="/atlas" class="top-nav-link" data-i18n="nav.atlas">Atlas</a>
+      <a href="/tree" class="top-nav-link" data-i18n="nav.tree">Tree</a>
+      <a href="/rank" class="top-nav-link" data-i18n="nav.rank">Rank</a>
+      <a href="/identify" class="top-nav-link nav-identify-link active" data-i18n="nav.identify" hidden>Identify</a>
+    </nav>
+  </header>
+
+  <main id="identify-main" class="identify-main">
+    <h2 class="page-title" data-i18n="identify.page_title">Identify</h2>
+    <p class="identify-explainer" data-i18n="identify.explainer">
+      Upload or take a photo of a bird and an AI model will suggest which of Iberia's 584 recorded species it
+      might be.
+    </p>
+
+    <div class="identify-disclaimer" role="note">
+      <p data-i18n="identify.disclaimer_ai">Results are produced by an AI model and may be wrong.</p>
+      <p data-i18n="identify.disclaimer_scope">
+        The model only knows Iberia's 584 recorded species. A photo of a bird from elsewhere, or of something
+        that isn't a bird at all, can still produce a result — always check the confidence shown below.
+      </p>
+    </div>
+
+    <section id="identify-upload" class="identify-upload">
+      <div class="identify-input-row">
+        <label class="identify-input-btn" for="identify-camera-input">
+          <span data-i18n="identify.take_photo">Take a photo</span>
+          <input
+            type="file"
+            id="identify-camera-input"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            hidden
+          >
+        </label>
+        <label class="identify-input-btn identify-input-btn-secondary" for="identify-file-input">
+          <span data-i18n="identify.choose_photo">Choose from library</span>
+          <input
+            type="file"
+            id="identify-file-input"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+          >
+        </label>
+      </div>
+
+      <div id="identify-preview-wrap" class="identify-preview-wrap" hidden>
+        <img id="identify-preview" class="identify-preview" alt="">
+        <div class="identify-location-row">
+          <button type="button" id="identify-location-btn" class="identify-location-btn" data-i18n="identify.use_location">
+            Include my location (optional)
+          </button>
+          <span id="identify-location-status" class="identify-location-status"></span>
+        </div>
+        <button type="button" id="identify-submit-btn" class="identify-submit-btn" data-i18n="identify.submit">
+          Identify
+        </button>
+      </div>
+    </section>
+
+    <p id="identify-status" class="status" aria-live="polite" hidden></p>
+
+    <section id="identify-results" class="identify-results" hidden>
+      <h3 data-i18n="identify.results_title">Candidates</h3>
+      <ol id="identify-results-list" class="identify-results-list"></ol>
+    </section>
+
+    <section id="identify-low-confidence" class="identify-low-confidence" hidden>
+      <p data-i18n="identify.not_confident">
+        The model could not identify this species with confidence.
+      </p>
+      <details>
+        <summary data-i18n="identify.show_guesses">Show low-confidence guesses anyway</summary>
+        <ol id="identify-low-confidence-list" class="identify-low-confidence-list"></ol>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p id="footer-data-line"></p>
+    <p id="footer-attribution-line"></p>
+  </footer>
+
+  <script src="lang.js"></script>
+  <script src="identify.js"></script>
+</body>
+</html>

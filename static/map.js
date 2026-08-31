@@ -101,6 +101,7 @@ async function init() {
   document.title = t("page.index_title", state.lang);
   applyStaticTranslations(state.lang);
   renderFooter(state.lang);
+  applyFeatureFlags();
 
   let regionsList;
   let regionsGeoJson;

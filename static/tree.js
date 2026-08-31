@@ -49,6 +49,7 @@ async function init() {
   document.title = t("page.tree_title", state.lang);
   applyStaticTranslations(state.lang);
   renderFooter(state.lang);
+  applyFeatureFlags();
 
   // Sequential, not Promise.all: the subtree request needs the root's own
   // id (never hardcoded -- see CLAUDE.md on phylo_nodes.id stability),

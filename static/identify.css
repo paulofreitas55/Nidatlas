@@ -1,0 +1,237 @@
+/* identify.html only -- reuses .page-title/.status/.card-thumb/.card-name/
+   .card-common/.photo-credit from style.css for visual consistency with the
+   atlas cards and other pages. Mobile-first throughout (base rules target a
+   phone-sized viewport, the single @media widens for desktop) since this is
+   the view most likely used outdoors, camera in hand. */
+
+.identify-main {
+  max-width: 640px;
+}
+
+.identify-explainer {
+  max-width: 60ch;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 1rem;
+}
+
+.identify-disclaimer {
+  background: var(--paper-box);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.identify-disclaimer p {
+  margin: 0.3rem 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.identify-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.identify-input-btn {
+  display: block;
+  text-align: center;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--paper);
+  background: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+}
+
+.identify-input-btn:hover,
+.identify-input-btn:focus-within {
+  filter: brightness(1.08);
+}
+
+.identify-input-btn-secondary {
+  color: var(--green);
+  background: var(--paper-box);
+}
+
+.identify-preview-wrap {
+  margin-top: 1.25rem;
+}
+
+.identify-preview {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  background: var(--paper-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.identify-location-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.identify-location-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--green);
+  background: var(--paper-box);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.identify-location-btn:hover,
+.identify-location-btn:focus-visible {
+  border-color: var(--green);
+}
+
+.identify-location-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.identify-submit-btn {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--paper);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+}
+
+.identify-submit-btn:hover,
+.identify-submit-btn:focus-visible {
+  filter: brightness(1.08);
+}
+
+.identify-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.identify-results-list,
+.identify-low-confidence-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.identify-candidate-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+}
+
+.identify-candidate-link:hover,
+.identify-candidate-link:focus-visible {
+  border-color: var(--accent);
+}
+
+.identify-candidate-thumb {
+  width: 56px;
+  flex: 0 0 auto;
+}
+
+.identify-candidate-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.identify-confidence {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.identify-confidence-bar {
+  flex: 1 1 auto;
+  height: 6px;
+  background: var(--paper-alt);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.identify-confidence-fill {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+
+.identify-confidence-label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.identify-low-confidence {
+  background: var(--paper-box);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.identify-low-confidence > p {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.identify-low-confidence summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.identify-low-confidence-list {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .identify-input-row {
+    flex-direction: row;
+  }
+
+  .identify-input-btn {
+    flex: 1 1 0;
+  }
+
+  .identify-submit-btn {
+    width: auto;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}

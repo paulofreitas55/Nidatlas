@@ -30,6 +30,7 @@
   "nav.atlas": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
   "nav.tree": { "en": "Tree", "pt": "Árvore", "es": "Árbol" },
   "nav.rank": { "en": "Rank", "pt": "Ranking", "es": "Ranking" },
+  "nav.identify": { "en": "Identify", "pt": "Identificar", "es": "Identificar" },
 
   "page.index_title": {
     "en": "Nidatlas — Birds of the Iberian Peninsula",
@@ -46,6 +47,11 @@
     "en": "Nidatlas — Rank",
     "pt": "Nidatlas — Ranking",
     "es": "Nidatlas — Ranking"
+  },
+  "page.identify_title": {
+    "en": "Nidatlas — Identify",
+    "pt": "Nidatlas — Identificar",
+    "es": "Nidatlas — Identificar"
   },
 
   "atlas.page_title": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
@@ -275,5 +281,49 @@
   "rank.rank_aria": { "en": "Rank {rank}", "pt": "Posição {rank}", "es": "Posición {rank}" },
   "rank.view_full": { "en": "View full ranking (all 584 species) →", "pt": "Ver ranking completo (584 espécies) →", "es": "Ver ranking completo (584 especies) →" },
   "rank.view_top_bottom": { "en": "← Back to top & bottom 50", "pt": "← Voltar ao top e fundo 50", "es": "← Volver al top y fondo 50" },
-  "rank.full_ranking_title": { "en": "Full ranking, most to least recorded", "pt": "Ranking completo, do mais ao menos registado", "es": "Ranking completo, de más a menos registrado" }
+  "rank.full_ranking_title": { "en": "Full ranking, most to least recorded", "pt": "Ranking completo, do mais ao menos registado", "es": "Ranking completo, de más a menos registrado" },
+
+  "identify.page_title": { "en": "Identify", "pt": "Identificar", "es": "Identificar" },
+  "identify.explainer": {
+    "en": "Upload or take a photo of a bird and an AI model will suggest which of Iberia's 584 recorded species it might be.",
+    "pt": "Carregue ou tire uma fotografia de uma ave e um modelo de IA irá sugerir a qual das 584 espécies registadas na Ibéria poderá pertencer.",
+    "es": "Sube o toma una fotografía de un ave y un modelo de IA sugerirá a cuál de las 584 especies registradas en Iberia podría pertenecer."
+  },
+  "identify.disclaimer_ai": {
+    "en": "Results are produced by an AI model and may be wrong.",
+    "pt": "Os resultados são produzidos por um modelo de IA e podem estar errados.",
+    "es": "Los resultados son producidos por un modelo de IA y pueden ser incorrectos."
+  },
+  "identify.disclaimer_scope": {
+    "en": "The model only knows Iberia's 584 recorded species. A photo of a bird from elsewhere, or of something that isn't a bird at all, can still produce a result — always check the confidence shown below.",
+    "pt": "O modelo só conhece as 584 espécies registadas na Ibéria. Uma fotografia de uma ave de outro local, ou de algo que nem sequer é uma ave, pode ainda assim produzir um resultado — verifique sempre a confiança apresentada abaixo.",
+    "es": "El modelo solo conoce las 584 especies registradas en Iberia. Una fotografía de un ave de otro lugar, o de algo que ni siquiera es un ave, puede igualmente producir un resultado — compruebe siempre la confianza mostrada abajo."
+  },
+  "identify.take_photo": { "en": "Take a photo", "pt": "Tirar uma fotografia", "es": "Tomar una fotografía" },
+  "identify.choose_photo": { "en": "Choose from library", "pt": "Escolher da galeria", "es": "Elegir de la galería" },
+  "identify.use_location": { "en": "Include my location (optional)", "pt": "Incluir a minha localização (opcional)", "es": "Incluir mi ubicación (opcional)" },
+  "identify.location_locating": { "en": "Locating…", "pt": "A localizar…", "es": "Localizando…" },
+  "identify.location_acquired": { "en": "Location added.", "pt": "Localização adicionada.", "es": "Ubicación añadida." },
+  "identify.location_denied": { "en": "Could not get your location.", "pt": "Não foi possível obter a sua localização.", "es": "No se pudo obtener su ubicación." },
+  "identify.location_unavailable": { "en": "Location is not available on this device.", "pt": "A localização não está disponível neste dispositivo.", "es": "La ubicación no está disponible en este dispositivo." },
+  "identify.submit": { "en": "Identify", "pt": "Identificar", "es": "Identificar" },
+  "identify.identifying": { "en": "Identifying…", "pt": "A identificar…", "es": "Identificando…" },
+  "identify.results_title": { "en": "Candidates", "pt": "Candidatas", "es": "Candidatas" },
+  "identify.confidence_aria": { "en": "Confidence: {pct}%", "pt": "Confiança: {pct}%", "es": "Confianza: {pct}%" },
+  "identify.not_confident": {
+    "en": "The model could not identify this species with confidence.",
+    "pt": "O modelo não conseguiu identificar esta espécie com confiança.",
+    "es": "El modelo no pudo identificar esta especie con confianza."
+  },
+  "identify.show_guesses": { "en": "Show low-confidence guesses anyway", "pt": "Mostrar sugestões de baixa confiança mesmo assim", "es": "Mostrar sugerencias de baja confianza de todos modos" },
+  "identify.error_generic": {
+    "en": "Something went wrong. Please try again.",
+    "pt": "Algo correu mal. Tente novamente.",
+    "es": "Algo salió mal. Inténtelo de nuevo."
+  },
+  "identify.error_too_large": { "en": "That image is too large (max 8MB).", "pt": "Essa imagem é demasiado grande (máx. 8MB).", "es": "Esa imagen es demasiado grande (máx. 8MB)." },
+  "identify.error_unsupported_type": { "en": "Unsupported file type — use JPEG, PNG or WebP.", "pt": "Tipo de ficheiro não suportado — use JPEG, PNG ou WebP.", "es": "Tipo de archivo no admitido — use JPEG, PNG o WebP." },
+  "identify.error_undecodable": { "en": "Could not read that image file.", "pt": "Não foi possível ler esse ficheiro de imagem.", "es": "No se pudo leer ese archivo de imagen." },
+  "identify.error_rate_limited": { "en": "Too many requests — please wait a moment and try again.", "pt": "Demasiados pedidos — aguarde um momento e tente novamente.", "es": "Demasiadas solicitudes — espere un momento e inténtelo de nuevo." },
+  "identify.error_unavailable": { "en": "Identification is temporarily unavailable.", "pt": "A identificação está temporariamente indisponível.", "es": "La identificación no está disponible temporalmente." }
 }
