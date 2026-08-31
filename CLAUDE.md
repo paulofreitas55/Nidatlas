@@ -242,21 +242,51 @@ request time. `data/` itself is gitignored — every file in it, including
    always wipes and repopulates both tables from scratch rather than
    accumulating.
 10. **`fetch_species_images.py`** — fetches one canonical, commercially-usable
-    photo per species: iNaturalist first (`photo_license=cc0,cc-by`,
-    research-grade, most-faved observation), Wikidata/Commons (P18, CC0/CC-BY
+    photo per species: manual overrides first (`data/image_overrides.csv`,
+    highest precedence — see below), then iNaturalist (`photo_license=cc0,
+    cc-by`, research-grade, most-faved observation among those that pass
+    `observation_is_suspect()`'s dead-specimen/taxidermy/toy/identifiable-
+    person screen — see Design decisions), Wikidata/Commons (P18, CC0/CC-BY
     only) as a fallback for whatever iNaturalist misses. Currently 584/584
-    species covered, entirely from iNaturalist (the Wikidata/Commons fallback
-    is exercised, but wasn't actually needed on the real run). Populates
-    `species.image_*` (see Database schema above). Independent of steps 5-9
-    except needing `species` to already exist (step 3). Every API response is
-    cached under `data/` (`inat_taxa_raw.json`, `inat_observations_raw.json`
-    — filtered before caching, NOT the raw response, see Design decisions —
-    `wikidata_images_raw.json`, `commons_metadata_raw.json`), keyed by the
-    exact query used, so a rerun only fetches names/ids not already tried —
-    safe to rerun any time; pass `--force` to refetch everything. See Design
-    decisions for the cascade order, the CC-BY-SA exclusion, the hotlinking
-    decision, and two real bugs caught building this (a search-endpoint
-    false negative, and the observations-cache size blowup).
+    species covered, entirely from iNaturalist (the Wikidata/Commons
+    fallback is exercised, but wasn't actually needed on the real run). A
+    manual review after that initial run found 40 species whose photo was a
+    dead/taxidermied specimen or contained a toy/figurine, plus 2 more
+    (caught in a later visual-review pass) whose photo showed a real bird
+    but also an identifiable person's face — see "Candidate-photo
+    screening" in Design decisions for the fix and
+    `data/image_overrides.csv` below for the manual escape hatch used
+    alongside it. Populates `species.image_*` (see Database schema above).
+    Independent of steps 5-9 except needing `species` to already exist
+    (step 3). Every API response is cached under `data/`
+    (`inat_taxa_raw.json`, `inat_observations_raw.json` — filtered before
+    caching, NOT the raw response, see Design decisions —
+    `inat_observation_overrides_raw.json`, `wikidata_images_raw.json`,
+    `commons_metadata_raw.json`), keyed by the exact query used, so a rerun
+    only fetches names/ids not already tried — safe to rerun any time, or
+    pass `--force` to refetch everything, or `--refetch-species-file
+    <path>` (one `gbif_name` per line) to reprocess just a named subset,
+    excluding each one's current iNaturalist observation so a genuinely
+    different photo is picked (used for the 40-species remediation above;
+    see that flag's own `--help` text). See Design decisions for the
+    cascade order, the CC-BY-SA exclusion, the hotlinking decision, and two
+    real bugs caught building this (a search-endpoint false negative, and
+    the observations-cache size blowup).
+
+    **`data/image_overrides.csv`** (`gbif_name,source,inat_observation_id,
+    inat_photo_id,commons_filename,note`) lets a human pin one specific
+    photo for one specific species, bypassing the entire cascade above for
+    that species — highest precedence, resolved before (and instead of) the
+    automated search. `source` is `inaturalist` (needs
+    `inat_observation_id`; `inat_photo_id` is optional — omit it to use that
+    observation's first licensed photo) or `commons` (needs
+    `commons_filename`, e.g. `Some_bird.jpg`, no `File:` prefix). Tracked in
+    git despite living under `data/` (see Conventions' curated-files list) —
+    not pre-populated with guesses, a human adds a row only after actually
+    checking the candidate photo. Currently holds the 4 species fixed by
+    hand during the 40-species remediation (2 dead/toy-screen escapes, 2
+    identifiable-person escapes — see Design decisions); use it for
+    whichever future species still doesn't look right after review.
 
 **`identify.py`** is not part of this pipeline — it's a standalone CLI
 (`python scripts/identify.py <image> [--species-list data/iberian_species.txt]`)
@@ -494,6 +524,55 @@ called by anything else in the repo.
   subspecies — see `data/image_source_synonyms.csv` for the resolved list
   and each one's specific reasoning). Both fixes were verified against the
   live API and confirmed with the user before being applied, not guessed at.
+- **Candidate-photo screening: dead-specimen/taxidermy/toy/identifiable-
+  person detection is a real filter on WHICH observation gets picked, not
+  just documentation.** A manual review of the first 584-species run found
+  40 species (see the git commit that introduced this screening for the
+  exact list) whose photo showed a dead/taxidermied specimen or contained a
+  toy/figurine rather than a live bird in the field — the "most-faved
+  research-grade observation" heuristic alone doesn't protect against
+  either, since a striking taxidermy shot or a novelty toy photo can still
+  collect real faves. Fixed two ways in `observation_is_suspect()`, checked
+  before ranking (not after — an excluded observation is never a candidate
+  at all, not merely deprioritized): (1) iNaturalist's own structured
+  "Alive or Dead" controlled-term annotation (`GET /v1/controlled_terms`
+  attribute id 17, value id 19 = "Dead") when present — reliable where it
+  exists, since it's a human annotation, not inferred; (2) a word-boundary
+  keyword regex (`SUSPECT_KEYWORDS_RE`) over the observation's description
+  + tags, covering both dead-specimen language (taxidermy, museum,
+  specimen, mounted, roadkill, ...) and toy/figurine language (toy,
+  figurine, decoy, replica, statue, ...), since plenty of specimen photos
+  are never annotated and toy photos have no "alive or dead" annotation to
+  begin with (they're not an organism at all). This is a heuristic, not a
+  guarantee — a photo with no description, no tags and no annotation sails
+  through regardless of what it shows — which is exactly why
+  `data/image_overrides.csv` (see the `fetch_species_images.py` pipeline
+  step above) exists alongside it as the human-verified escape hatch, not
+  instead of it. Ties are now broken by `identifications_count` (more
+  independent agreement the ID itself is correct) ahead of the
+  observation id, on the theory that an observation several people have
+  separately confirmed is marginally more likely to be a clean, correctly
+  identified photo than one nobody but the uploader has weighed in on —
+  a secondary signal, not load-bearing on its own.
+
+  A second, later pass through the SAME 40-species remediation added a
+  third check, `PEOPLE_KEYWORDS_RE`: an identifiable-person keyword
+  (person, child, selfie, portrait, ...) in the description/tags also
+  excludes a candidate now. This is a genuinely different concern from
+  everything above — CC0/CC-BY clears the PHOTO's own copyright, it says
+  nothing about the separate image/likeness rights of a person who happens
+  to be IN the photo, and this project has no consent from any such person
+  to publish their picture. Caught the same way as the dead/toy cases: by
+  actually looking at the photo, not by this filter — both
+  `Columba livia`'s and `Sitta europaea`'s automated re-picks during the
+  40-species remediation put an identifiable person's face (a child's, in
+  one case) prominently in frame, with nothing in either observation's
+  text for a keyword screen to have caught. Both are now pinned via
+  `data/image_overrides.csv` to a re-checked photo showing only the bird.
+  `PEOPLE_KEYWORDS_RE` is added going forward as a best-effort net over the
+  minority of observations that DO carry descriptive text, exactly as
+  limited as `SUSPECT_KEYWORDS_RE` above — it is not a substitute for
+  visually checking a candidate before trusting it.
 - **`fetch_species_images.py`'s observation cache is filtered before being
   cached, not the literal raw API response, despite this file's usual
   convention of caching responses verbatim.** Caught the hard way: the
@@ -598,7 +677,7 @@ called by anything else in the repo.
   inside it are deliberately tracked anyway**, via explicit `!data/...`
   negations in `.gitignore`: `taxonomy_synonyms.csv`,
   `ott_taxonomy_synonyms.csv`, `ott_ambiguous_resolutions.csv`,
-  `image_source_synonyms.csv`. The principle: everything in `data/` that a
+  `image_source_synonyms.csv`, `image_overrides.csv`. The principle: everything in `data/` that a
   script can *derive* (the built SQLite DB, cached API responses, the
   cleaned cube) stays out of git, since it's regenerable from source and
   would just bloat the repo — but a file that records a *human decision*
@@ -637,7 +716,14 @@ detail page, tree of life view, occurrence-count ranking) fully implemented
 and localized in pt/es/en with shared top-level MAP/ATLAS/TREE/RANK
 navigation. Every species now has a real, commercially-usable, attributed
 photo (584/584 — see the "Species photo cascade" design decision) shown on
-its atlas card, its own page and the rank lists. The BioCLIP 2
+its atlas card, its own page and the rank lists; a manual review afterward
+found 40 species with an unsuitable (dead-specimen/taxidermy/toy) photo
+and, in a later visual pass, 2 more with an identifiable person's face (a
+child's, in one case) prominently in frame — all now both screened against
+automatically going forward (`observation_is_suspect()`, covering
+dead-specimen/taxidermy/toy AND identifiable-person cases) and fixable by
+hand via `data/image_overrides.csv` — see the "Candidate-photo screening"
+design decision. The BioCLIP 2
 identification script
 works standalone but is **not yet wired into the web app** — there is no
 upload-a-photo flow in the UI yet, despite the README's original

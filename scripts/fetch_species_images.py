@@ -66,6 +66,41 @@ and Open Tree of Life's own naming gaps were (see fetch_phylogeny.py):
   a row only after actually checking what the source currently calls that
   species.
 
+Candidate photos are screened before ranking: an observation annotated
+"Alive or Dead: Dead" (iNaturalist's own structured controlled-term
+annotation, controlled_attribute_id 17 / controlled_value_id 19 -- see
+observation_is_suspect()), or whose description/tags match a taxidermy,
+museum-specimen or toy/figurine keyword, or an identifiable-person keyword,
+is excluded from consideration entirely, never merely deprioritized -- see
+SUSPECT_KEYWORDS_RE and PEOPLE_KEYWORDS_RE. The people screen exists for a
+reason distinct from the licence check above: CC0/CC-BY clears the PHOTO's
+copyright, not the separate image/likeness rights of a person who happens
+to be IN it, and this project has no consent from any such person to
+publish their photo. Among the remaining candidates the pick is still
+"most-faved first" as before, with identifications_count (more independent
+agreement the ID is correct) as the tiebreaker ahead of the deterministic
+id tiebreak. This was added after a manual review of the first 584-species
+run found 40 species whose photo was a dead/taxidermied specimen or
+contained a toy/figurine -- keyword and annotation screening catches most
+of that class going forward, but is a heuristic, not a guarantee (both
+screens are text-only, over description/tags most observations don't even
+have), which is exactly what image_overrides.csv (see below) exists to
+correct by hand on a case-by-case basis -- as happened for two species in
+that same remediation whose photo showed a real live bird but also an
+identifiable person's face (one a child's), caught only by looking at the
+actual photo, not by this screen.
+
+data/image_overrides.csv (gbif_name,source,inat_observation_id,
+inat_photo_id,commons_filename,note) lets a human pin one specific photo
+for one specific species, bypassing the entire search-and-rank cascade
+above for that species. Highest precedence: a species listed there is
+resolved directly from the named observation/photo or Commons file and
+never enters the automated iNaturalist or Wikidata search at all. Not
+pre-populated with guesses -- a human adds a row only after actually
+looking at the candidate photo. See CLAUDE.md's "Species photo cascade"
+design decision for why this exists alongside (not instead of) the
+automated screening above.
+
 Every API response is cached under data/ (see *_CACHE_PATH below), keyed by
 the exact query string/id used, so a rerun only fetches whatever a NEW
 candidate name (e.g. a synonym just added) hasn't been tried yet --
@@ -109,11 +144,13 @@ DB_PATH = DATA_DIR / "nidatlas.db"
 
 INAT_TAXA_CACHE_PATH = DATA_DIR / "inat_taxa_raw.json"
 INAT_OBSERVATIONS_CACHE_PATH = DATA_DIR / "inat_observations_raw.json"
+INAT_OBSERVATION_OVERRIDE_CACHE_PATH = DATA_DIR / "inat_observation_overrides_raw.json"
 WIKIDATA_CACHE_PATH = DATA_DIR / "wikidata_images_raw.json"
 COMMONS_CACHE_PATH = DATA_DIR / "commons_metadata_raw.json"
 
 BIOCLIP_SYNONYMS_PATH = DATA_DIR / "taxonomy_synonyms.csv"
 IMAGE_SYNONYMS_PATH = DATA_DIR / "image_source_synonyms.csv"
+IMAGE_OVERRIDES_PATH = DATA_DIR / "image_overrides.csv"
 
 INAT_API = "https://api.inaturalist.org/v1"
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
@@ -125,12 +162,56 @@ INAT_REQUEST_DELAY_SECONDS = 1.1
 # "Most-faved" is picked among the top OBSERVATIONS_PAGE_SIZE results from
 # iNaturalist's own order_by=votes ordering, not an exhaustive scan of every
 # qualifying observation (some species have thousands) -- see
-# pick_best_observation(). 50 is generous enough to almost always contain
-# the true best while keeping each request's response small.
-OBSERVATIONS_PAGE_SIZE = 50
+# pick_best_observation(). 100 (iNaturalist's per_page max is 200) leaves
+# enough headroom that excluding suspect/dead/toy candidates (see
+# observation_is_suspect()) still almost always leaves a real choice on the
+# same single request, rather than needing a second page fetch.
+OBSERVATIONS_PAGE_SIZE = 100
 ALLOWED_LICENSE_CODES = {"cc0", "cc-by"}
 
 HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+# iNaturalist's own controlled-term annotation for "Alive or Dead" (see
+# GET /v1/controlled_terms) -- attribute id 17, value id 19 is "Dead".
+# Structured and reliable where it's present, unlike free-text screening.
+ALIVE_OR_DEAD_ATTRIBUTE_ID = 17
+DEAD_VALUE_ID = 19
+
+# Free-text screen for what the structured annotation can't catch: taxidermy/
+# museum-specimen photos that were never annotated, and toy/figurine/replica
+# photos (not a real animal at all, so "Alive or Dead" doesn't apply to them
+# in the first place). Word-boundary, case-insensitive, checked against each
+# observation's description + tags. A heuristic, not a guarantee -- see
+# image_overrides.csv for the manual escape hatch when this still misses one.
+SUSPECT_KEYWORDS_RE = re.compile(
+    r"\b("
+    r"taxidermy|museum|specimen|mounted?|skeleton|skin|preserved|cadaver|corpse|"
+    r"carcass|roadkill|road[- ]?kill|window[- ]?strike|window[- ]?collision|"
+    r"found dead|pinned|study skin|"
+    r"toy|toys|figurine|plush|decoy|statue|replica|"
+    r"artificial|sculpture|carving|ornament|souvenir|"
+    r"rubber duck|plastic bird|origami|illustration|painting|drawing|cartoon"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Screens for an identifiable PERSON in frame, not for licence/copyright --
+# CC0/CC-BY only clear the photo's own copyright, they say nothing about the
+# separate image rights of a person who happens to be IN the photo, and this
+# project has no consent from any such person to publish their likeness
+# (this really happened: the 2026-08 photo remediation's automated re-picks
+# for Columba livia and Sitta europaea both put an identifiable person's --
+# in one case a child's -- face front and center; see image_overrides.csv
+# for the fix). Same limitation as SUSPECT_KEYWORDS_RE above: this is a
+# text-only heuristic over description/tags, not actual image content, and
+# most observations have neither -- it will catch an observer who mentions
+# a person in their own text, nothing more. A clean pass here is NOT proof
+# the photo has no one in it; manually look at every candidate before
+# trusting it, same as for the dead-specimen/toy screen.
+PEOPLE_KEYWORDS_RE = re.compile(
+    r"\b(person|people|human|man|men|woman|women|child|children|kid|kids|boy|girl|selfie|portrait|family)\b",
+    re.IGNORECASE,
+)
 
 
 MAX_RETRIES = 4
@@ -250,7 +331,10 @@ def _slim_observation(obs: dict) -> dict:
     # slowing checkpoint saves, since re-serializing an ever-growing
     # multi-GB dict every 20 fetches is O(n) per save = O(n^2) overall).
     # Keeping only the handful of fields actually read below cuts a typical
-    # entry from megabytes to well under a kilobyte.
+    # entry from megabytes to well under a kilobyte -- including the fields
+    # observation_is_suspect() needs (description/tags/is_dead), which are
+    # themselves short strings/a bool, not the full nested payload they're
+    # derived from.
     #
     # photographer comes from the OBSERVATION's user, not the photo's own
     # "attribution" string -- that string omits the photographer entirely
@@ -258,9 +342,18 @@ def _slim_observation(obs: dict) -> dict:
     # to build "Photo: {name}, ..." for both licences uniformly. Same
     # name-or-login fallback iNaturalist's own attribution string uses.
     user = obs.get("user") or {}
+    is_dead = any(
+        a.get("controlled_attribute_id") == ALIVE_OR_DEAD_ATTRIBUTE_ID
+        and a.get("controlled_value_id") == DEAD_VALUE_ID
+        for a in obs.get("annotations", [])
+    )
     return {
         "id": obs["id"],
         "faves_count": obs.get("faves_count", 0),
+        "identifications_count": obs.get("identifications_count", 0),
+        "is_dead": is_dead,
+        "description": (obs.get("description") or "")[:1000],
+        "tags": obs.get("tags", []),
         "photographer": user.get("name") or user.get("login") or "unknown photographer",
         "observation_photos": [
             {
@@ -292,19 +385,42 @@ def inat_fetch_observations(taxon_id: int, cache: dict) -> dict:
     return cache[key]
 
 
-def inat_pick_best_photo(observations_response: dict) -> dict | None:
+def observation_is_suspect(obs: dict) -> bool:
+    """True if this observation looks like a dead/taxidermied specimen, a
+    toy/figurine, or has an identifiable person in frame, rather than a
+    clean live-bird-in-the-field photo -- see SUSPECT_KEYWORDS_RE,
+    ALIVE_OR_DEAD_ATTRIBUTE_ID and PEOPLE_KEYWORDS_RE above for what's
+    checked and why. A heuristic: absence of a signal is not proof the
+    photo is fine, just that nothing here caught it -- always look at the
+    actual photo before trusting an automated pick (see PEOPLE_KEYWORDS_RE's
+    own comment for a real case this text-only screen could not catch)."""
+    if obs.get("is_dead"):
+        return True
+    text = obs.get("description") or ""
+    tags = obs.get("tags") or []
+    haystack = text + " " + " ".join(tags)
+    return bool(SUSPECT_KEYWORDS_RE.search(haystack) or PEOPLE_KEYWORDS_RE.search(haystack))
+
+
+def inat_pick_best_photo(observations_response: dict, exclude_observation_ids: frozenset[int] = frozenset()) -> dict | None:
     """Most-faved observation among the top page of results (see
-    OBSERVATIONS_PAGE_SIZE), ties broken by the lower (older) observation id
-    for a deterministic pick -- not a quality judgement, just a tiebreaker.
+    OBSERVATIONS_PAGE_SIZE), after dropping any observation in
+    exclude_observation_ids and any that observation_is_suspect() flags as a
+    likely dead specimen or toy/figurine. Ties on faves_count are broken by
+    identifications_count (more independent agreement the ID is correct),
+    then by the lower (older) observation id for a fully deterministic pick.
     Returns {"observation_id", "photo", "photographer"} for the first photo
     on that observation whose OWN licence is in ALLOWED_LICENSE_CODES (the
     photo_license filter guarantees at least one such photo exists
     somewhere on SOME returned observation, not necessarily every photo on
     the one we picked)."""
-    results = observations_response.get("results", [])
+    results = [
+        o for o in observations_response.get("results", [])
+        if o["id"] not in exclude_observation_ids and not observation_is_suspect(o)
+    ]
     if not results:
         return None
-    best = max(results, key=lambda o: (o.get("faves_count", 0), -o["id"]))
+    best = max(results, key=lambda o: (o.get("faves_count", 0), o.get("identifications_count", 0), -o["id"]))
     for obs_photo in best.get("observation_photos", []):
         photo = obs_photo["photo"]
         if photo.get("license_code") in ALLOWED_LICENSE_CODES:
@@ -317,6 +433,67 @@ def inat_image_url(photo: dict) -> str:
     # the URL. "large" balances quality against not hotlinking a full
     # multi-MB original for what's ultimately a card/species-page image.
     return photo["url"].replace("square", "large")
+
+
+def inat_fetch_observation_by_id(observation_id: int, cache: dict) -> dict | None:
+    """Used only by manual overrides (see resolve_inat_override) -- fetches
+    one specific observation by id, not a taxon search. No suspect
+    screening here: a human picked this observation deliberately, an
+    override is the explicit "trust me" escape hatch from that screening."""
+    key = str(observation_id)
+    if key not in cache:
+        url = f"{INAT_API}/observations/{observation_id}"
+        raw = _get_json(url)
+        results = raw.get("results", [])
+        cache[key] = _slim_observation(results[0]) if results else None
+        time.sleep(INAT_REQUEST_DELAY_SECONDS)
+    return cache[key]
+
+
+# --- Manual overrides ---
+
+def load_image_overrides() -> dict[str, dict]:
+    if not IMAGE_OVERRIDES_PATH.is_file():
+        return {}
+    with IMAGE_OVERRIDES_PATH.open(encoding="utf-8", newline="") as f:
+        return {row["gbif_name"]: row for row in csv.DictReader(f) if row.get("gbif_name")}
+
+
+def resolve_inat_override(row: dict, cache: dict) -> dict | None:
+    observation_id = int(row["inat_observation_id"])
+    obs = inat_fetch_observation_by_id(observation_id, cache)
+    if obs is None:
+        return None
+    photo_id = row.get("inat_photo_id", "").strip()
+    candidates = obs.get("observation_photos", [])
+    if photo_id:
+        candidates = [op for op in candidates if str(op["photo"]["id"]) == photo_id]
+    for obs_photo in candidates:
+        photo = obs_photo["photo"]
+        if photo.get("license_code") in ALLOWED_LICENSE_CODES:
+            return {
+                "image_url": inat_image_url(photo),
+                "image_source": "inaturalist",
+                "image_license": photo["license_code"],
+                "image_attribution": build_display_attribution(obs.get("photographer"), photo["license_code"]),
+                "image_source_url": f"https://www.inaturalist.org/observations/{observation_id}",
+            }
+    return None
+
+
+def resolve_commons_override(row: dict, cache: dict) -> dict | None:
+    fname = row["commons_filename"].strip()
+    meta = fetch_commons_metadata([fname], cache).get(fname, {})
+    license_code = normalize_commons_license(meta.get("license_short"))
+    if license_code is None:
+        return None
+    return {
+        "image_url": meta.get("thumburl") or meta.get("url"),
+        "image_source": "wikidata",
+        "image_license": license_code,
+        "image_attribution": build_display_attribution(strip_html(meta.get("artist")), license_code),
+        "image_source_url": f"https://commons.wikimedia.org/wiki/File:{urllib.parse.quote(fname)}",
+    }
 
 
 # --- Wikidata / Commons ---
@@ -411,32 +588,106 @@ def ensure_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE species ADD COLUMN {column} TEXT")
 
 
+def load_refetch_list(path: Path) -> list[str]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+
+
+def observation_id_from_url(source_url: str) -> int:
+    return int(source_url.rstrip("/").rsplit("/", 1)[-1])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="ignore cached API responses and refetch everything")
+    parser.add_argument(
+        "--refetch-species-file",
+        type=Path,
+        default=None,
+        help=(
+            "path to a text file of gbif_name values (one per line, '#' comments allowed) to "
+            "reprocess -- every other species is left untouched. Each named species' current "
+            "iNaturalist observation (if any) is excluded from re-selection, so a different photo "
+            "is picked, and its cached observations entry is refetched live so the new "
+            "specimen/toy screening (see observation_is_suspect) actually applies to it."
+        ),
+    )
     args = parser.parse_args()
 
     if args.force:
-        for path in (INAT_TAXA_CACHE_PATH, INAT_OBSERVATIONS_CACHE_PATH, WIKIDATA_CACHE_PATH, COMMONS_CACHE_PATH):
+        for path in (
+            INAT_TAXA_CACHE_PATH, INAT_OBSERVATIONS_CACHE_PATH, INAT_OBSERVATION_OVERRIDE_CACHE_PATH,
+            WIKIDATA_CACHE_PATH, COMMONS_CACHE_PATH,
+        ):
             path.unlink(missing_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
     ensure_columns(conn)
-    species = conn.execute("SELECT id, gbif_name FROM species ORDER BY id").fetchall()
+    all_species = conn.execute("SELECT id, gbif_name FROM species ORDER BY id").fetchall()
+
+    refetch_exclude: dict[str, int] = {}
+    if args.refetch_species_file:
+        refetch_names = set(load_refetch_list(args.refetch_species_file))
+        species = [(sid, name) for sid, name in all_species if name in refetch_names]
+        missing = refetch_names - {name for _, name in species}
+        if missing:
+            print(f"WARNING: {len(missing)} name(s) in {args.refetch_species_file} not found in species table: {sorted(missing)}")
+        current_rows = conn.execute(
+            "SELECT gbif_name, image_source, image_source_url FROM species WHERE gbif_name IN ({})".format(
+                ",".join("?" * len(species))
+            ),
+            [name for _, name in species],
+        ).fetchall()
+        for name, source, source_url in current_rows:
+            if source == "inaturalist" and source_url:
+                refetch_exclude[name] = observation_id_from_url(source_url)
+    else:
+        species = all_species
 
     bioclip_by_gbif = load_csv_map(BIOCLIP_SYNONYMS_PATH, "gbif_name", "bioclip_name")
     image_synonyms = load_image_synonyms()
+    image_overrides = load_image_overrides()
 
     inat_taxa_cache = load_json_cache(INAT_TAXA_CACHE_PATH)
     inat_obs_cache = load_json_cache(INAT_OBSERVATIONS_CACHE_PATH)
+    inat_override_cache = load_json_cache(INAT_OBSERVATION_OVERRIDE_CACHE_PATH)
+    commons_cache = load_json_cache(COMMONS_CACHE_PATH)
 
     results: dict[str, dict | None] = {}
     inat_unmatched: list[str] = []  # no exact-name taxon at all -- naming gap
     inat_no_licensed_photo: list[str] = []  # taxon found, but no cc0/cc-by research-grade photo
 
-    print(f"=== Step 1: iNaturalist ({len(species)} species) ===")
+    # --- Step 0: manual overrides -- highest precedence, resolved before (and
+    # instead of) the automated search below for whichever species have one ---
+    species_names = {name for _, name in species}
+    relevant_overrides = {name: row for name, row in image_overrides.items() if name in species_names}
+    override_resolved: set[str] = set()
+    if relevant_overrides:
+        print(f"=== Step 0: manual overrides ({len(relevant_overrides)}) ===")
+        for gbif_name, row in relevant_overrides.items():
+            source = (row.get("source") or "").strip().lower()
+            if source == "inaturalist":
+                r = resolve_inat_override(row, inat_override_cache)
+            elif source == "commons":
+                r = resolve_commons_override(row, commons_cache)
+            else:
+                print(f"  ERROR: {gbif_name}: unknown override source {row.get('source')!r} (expected inaturalist/commons)")
+                continue
+            if r is None:
+                print(f"  ERROR: {gbif_name}: override row in {IMAGE_OVERRIDES_PATH} could not be resolved -- check the observation/photo/file id")
+                continue
+            results[gbif_name] = r
+            override_resolved.add(gbif_name)
+            print(f"  {gbif_name}: pinned to {r['image_source_url']}")
+        save_json_cache(INAT_OBSERVATION_OVERRIDE_CACHE_PATH, inat_override_cache)
+        save_json_cache(COMMONS_CACHE_PATH, commons_cache)
+
+    print(f"\n=== Step 1: iNaturalist ({len(species)} species) ===")
     fetch_count = 0
     for idx, (_, gbif_name) in enumerate(species):
+        if gbif_name in override_resolved:
+            continue
+
         taxon = None
         for candidate in candidate_names(gbif_name, bioclip_by_gbif, "inaturalist_name", image_synonyms):
             taxa_response = inat_search_taxon(candidate, inat_taxa_cache)
@@ -449,9 +700,14 @@ def main() -> None:
             inat_unmatched.append(gbif_name)
             results[gbif_name] = None
         else:
+            if args.refetch_species_file:
+                # old cache entries predate description/tags/is_dead -- a
+                # cached hit would silently skip the new specimen/toy screen
+                inat_obs_cache.pop(str(taxon["id"]), None)
             obs_response = inat_fetch_observations(taxon["id"], inat_obs_cache)
             fetch_count += 1
-            best = inat_pick_best_photo(obs_response)
+            exclude_ids = frozenset({refetch_exclude[gbif_name]}) if gbif_name in refetch_exclude else frozenset()
+            best = inat_pick_best_photo(obs_response, exclude_ids)
             if best is None:
                 inat_no_licensed_photo.append(gbif_name)
                 results[gbif_name] = None
@@ -468,8 +724,16 @@ def main() -> None:
         if fetch_count and fetch_count % 20 == 0:
             save_json_cache(INAT_TAXA_CACHE_PATH, inat_taxa_cache)
             save_json_cache(INAT_OBSERVATIONS_CACHE_PATH, inat_obs_cache)
-        if (idx + 1) % 50 == 0:
-            print(f"  ...{idx + 1}/{len(species)}")
+        # A --refetch-species-file run is small (well under 50) and each
+        # species can take a real, variable amount of wall time -- some
+        # extremely common species (Columba livia, Motacilla alba, ...)
+        # make iNaturalist's own order_by=votes query genuinely slow
+        # server-side -- so print every species in that mode instead of
+        # going silent for the whole run; a full 584-species run keeps the
+        # coarser every-50 cadence.
+        progress_step = 1 if args.refetch_species_file else 50
+        if (idx + 1) % progress_step == 0 or (idx + 1) == len(species):
+            print(f"  ...{idx + 1}/{len(species)}  ({gbif_name})")
 
     save_json_cache(INAT_TAXA_CACHE_PATH, inat_taxa_cache)
     save_json_cache(INAT_OBSERVATIONS_CACHE_PATH, inat_obs_cache)
@@ -484,7 +748,6 @@ def main() -> None:
     print(f"\n=== Step 2: Wikidata/Commons fallback ({len(needs_fallback)} species) ===")
 
     wikidata_cache = load_json_cache(WIKIDATA_CACHE_PATH)
-    commons_cache = load_json_cache(COMMONS_CACHE_PATH)
 
     candidates_by_gbif = {
         name: candidate_names(name, bioclip_by_gbif, "wikidata_name", image_synonyms) for name in needs_fallback
@@ -568,6 +831,21 @@ def main() -> None:
             "(gbif_name,inaturalist_name,wikidata_name,note) once you've checked what each source "
             "currently calls that species, then rerun."
         )
+
+    if args.refetch_species_file:
+        print(f"\n=== Refetched species: new photo for review ({len(species)}) ===")
+        for _, gbif_name in species:
+            r = results.get(gbif_name)
+            if r is None:
+                print(f"  - {gbif_name}: NO REPLACEMENT FOUND -- see errors/uncovered list above")
+                continue
+            previous = (
+                f" (previously observation {refetch_exclude[gbif_name]})"
+                if gbif_name in refetch_exclude
+                else " (no previous iNaturalist observation to exclude)"
+            )
+            print(f"  - {gbif_name}: {r['image_url']}{previous}")
+            print(f"      observation: {r['image_source_url']}")
 
 
 if __name__ == "__main__":
