@@ -132,7 +132,24 @@
 }
 
 /* Month filter, region selector, and map panels/legend/popup styles now
-   live in style.css -- shared with the region map (static/map.js). */
+   live in style.css -- shared with the region map (static/map.js). The
+   cladogram itself (.cladogram-canvas/.cladogram-*) also lives in
+   style.css, shared with tree.html -- only this section's own "open in
+   full tree" link is specific to this page. */
+
+.phylo-open-tree-link {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.phylo-open-tree-link:hover,
+.phylo-open-tree-link:focus-visible {
+  color: var(--accent);
+}
 
 /* Wider screens */
 

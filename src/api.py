@@ -122,11 +122,36 @@ def api_species_relatives(
     species_id: int,
     limit: int = Query(10, ge=1, le=100),
     conn: sqlite3.Connection = Depends(get_db),
-) -> list[dict]:
+) -> dict:
+    # node_id: the species' own tip, for the frontend to fetch/highlight its
+    # own position. clade_node_id: the MRCA of the species AND EVERY listed
+    # relative together (not just the farthest one -- see
+    # phylo_mrca_of_node_ids for why that shortcut doesn't work), i.e. the
+    # smallest clade that actually contains every relative this response
+    # names, so a caller can fetch ONE subtree
+    # (GET /api/phylo/{clade_node_id}/subtree) to render this exact
+    # neighbourhood as a connected cladogram, and link "open in full tree"
+    # to that same node. Both are None when the species has no tree
+    # placement at all (see phylo_species_node_id).
     try:
-        return queries.phylo_closest_relatives(conn, species_id, limit)
+        node_id = queries.phylo_species_node_id(conn, species_id)
+        relatives = queries.phylo_closest_relatives(conn, species_id, limit)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
+
+    clade_node_id = None
+    if relatives:
+        all_node_ids = [node_id] + [r["node_id"] for r in relatives]
+        clade_node_id = queries.phylo_mrca_of_node_ids(conn, all_node_ids)["node_id"]
+    elif node_id is not None:
+        clade_node_id = node_id
+
+    return {"species_id": species_id, "node_id": node_id, "clade_node_id": clade_node_id, "relatives": relatives}
+
+
+@app.get("/api/phylo/root")
+def api_phylo_root(conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    return queries.phylo_tree_root(conn)
 
 
 @app.get("/api/phylo/{node_id}/subtree")
@@ -168,11 +193,12 @@ def api_region_cells(
         raise HTTPException(status_code=404, detail=f"no region with id {region_id}")
 
 
-# The region map is the site's landing page and the species atlas lives at
-# /atlas -- both are plain static files (static/map.html, static/atlas.html),
-# but StaticFiles(html=True) below only auto-serves index.html for "/", not
-# a same-directory file under a different name. These two explicit routes
-# are declared ahead of the Mount for that reason; every other static asset
+# The region map is the site's landing page and the species atlas/tree
+# views live at /atlas and /tree -- all three are plain static files
+# (static/map.html, static/atlas.html, static/tree.html), but
+# StaticFiles(html=True) below only auto-serves index.html for "/", not a
+# same-directory file under a different name. These explicit routes are
+# declared ahead of the Mount for that reason; every other static asset
 # (map.js, atlas.html hit directly, species.html, *.geojson, ...) still
 # resolves through the Mount by its own filename exactly as before.
 @app.get("/", include_in_schema=False)
@@ -183,6 +209,11 @@ def serve_map() -> FileResponse:
 @app.get("/atlas", include_in_schema=False)
 def serve_atlas() -> FileResponse:
     return FileResponse("static/atlas.html")
+
+
+@app.get("/tree", include_in_schema=False)
+def serve_tree() -> FileResponse:
+    return FileResponse("static/tree.html")
 
 
 # Mounted last and at "/" so it only catches paths no route above already

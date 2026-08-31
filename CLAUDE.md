@@ -44,14 +44,27 @@ local/dev-oriented choice (see the comment in `api.py`), revisit before a
 real public deployment where you'd want real caching back.
 
 **Frontend** (`static/`, no build step, no framework, no bundler — plain
-`<script>` tags): three pages sharing common CSS/JS.
+`<script>` tags): four pages sharing common CSS/JS.
 - `map.html` + `map.css` + `map.js` — the landing page (served at `/`). The
   97-region choropleth, shaded by total occurrences, with an archipelago
   panel selector and a side panel showing per-region species rankings.
 - `atlas.html` + `app.js` — served at `/atlas`. The full 584-species card
   grid, grouped by order/family, with search.
 - `species.html` + `species.js` + `species.css` — one species' profile:
-  identity, seasonality chart (pure SVG), and its own distribution map.
+  identity, seasonality chart (pure SVG), its own distribution map, and a
+  "Position in the tree of life" section (see `phylogeny` below).
+- `tree.html` + `tree.css` + `tree.js` — served at `/tree`. The ENTIRE
+  phylogenetic tree (all 577 placed species) drawn as one continuous,
+  vertically-scrolling rectangular cladogram, plus zoom controls and a
+  species search box (see `phylogeny` below) — rendering all ~1,160 visible
+  nodes at once turned out to be cheap (see the render-time note below), so
+  there's no level-by-level navigation to maintain.
+- `cladogram.js` — the shared rectangular-cladogram SVG renderer behind both
+  `tree.js` and `species.js`'s tree section: given a small node graph (id,
+  children, label, tip/clickable/muted flags), it lays out and draws it,
+  nothing more. Deliberately knows nothing about phylogeny, the API, or
+  i18n — each caller decides which nodes to include and what a click means.
+  No graph library; pure SVG built with `document.createElementNS`.
 - `common.js` — shared between `map.js` and `species.js`: panel-map
   construction, the archipelago panel-group framing, the warm log-binned
   color scale, the legend, GBIF-search-link building. Factored out once both
@@ -59,10 +72,10 @@ real public deployment where you'd want real caching back.
 - `lang.js` — the pt/es/en language switch, `t()`/`tPlural()` translation
   lookup, and the declarative `data-i18n*` attribute binder. Loaded by every
   page before its own script.
-- `style.css` — shared header, footer, card, and map-panel styles across all
-  three pages. `species.css`/`map.css` hold only what's specific to that one
-  page — check `style.css` first before assuming a rule needs to be added
-  per-page.
+- `style.css` — shared header, footer, card, map-panel, and cladogram
+  (`.cladogram-*`) styles across all four pages. `species.css`/`map.css`/
+  `tree.css` hold only what's specific to that one page — check `style.css`
+  first before assuming a rule needs to be added per-page.
 - `i18n.json` — every UI string in the app, keyed by dotted key
   (`"page.title": {"en": ..., "pt": ..., "es": ...}`). See Conventions.
 
@@ -73,6 +86,50 @@ administrative-region choropleth, `/pt_es_border.geojson` for the
 Portugal/Spain border line) and `/taxa_labels.json` (order/family
 descriptions shown in the atlas). None of the frontend talks to SQLite
 directly — everything goes through the API.
+
+**Phylogeny frontend, specifically:** `tree.js` fetches the tree once
+(`GET /api/phylo/root` to discover the root id — never hardcoded, see the
+`phylo_nodes` schema row below — then one `GET /api/phylo/{root}/subtree`,
+~2,600 raw nodes) and renders the WHOLE thing in a single pass, fully
+expanded, rather than navigating into it level by level. It still collapses
+single-child chains before drawing (`collapseToBranch` in `tree.js`) —
+OToL's synthesis frequently inserts long single-child `mrcaottXottY` runs
+with no real branching (observed directly: some species sit under 30+
+nested wrappers before the next actual split, and the measured maximum
+*effective* — i.e. real-branch-point — depth is 27, against a raw depth of
+55), so without collapsing those the tree would be far taller and far less
+legible than the branching structure actually warrants. What's left after
+collapsing (~1,160 nodes: 577 resolved tips + a handful of unresolved ones +
+their internal branch points) renders in ~20ms in a headless-Chrome
+measurement — comfortably fast enough that no virtualization was needed.
+Two features layer on top of that single render: a zoom control that only
+rescales the already-drawn SVG's `width`/`height` attributes against its
+fixed `viewBox` (cheap — the browser scales the painted output like an
+`<img>`, no re-layout), and a search box that scrolls to and highlights a
+matching tip via `scrollIntoView` + a CSS class, auto-expanding any manually
+collapsed ancestor first (`expandAncestorsOf`) so the target is guaranteed
+to actually be in the DOM. A clade can still be collapsed by clicking it
+(`toggleCollapse`) for working with one large group at a time; the tree
+simply starts fully expanded rather than starting collapsed and requiring
+navigation in. A named internal node shows its name; an unnamed one shows
+no placeholder text at all, on the view that the branch point itself is
+already the information — `species.js`'s smaller neighbourhood view (below)
+follows the same rule for consistency, even though its subtree is only
+3-6 nodes. Tip labels align in a flush right-hand column regardless of how deep a
+given branch runs (`renderCladogram`'s `alignTips` option in
+`cladogram.js`), each connected to its real (topologically correct) branch
+position by a dashed guide line — the standard published-cladogram
+convention — which `species.js`'s neighbourhood view leaves off since its
+depth range is already small enough not to need it.
+
+`species.js`'s "Position in the tree of life" section fetches only the
+species' own small neighbourhood: `GET /api/species/{id}/relatives` names
+`clade_node_id`, the *smallest clade containing the species and every
+listed relative*, which `GET /api/phylo/{clade_node_id}/subtree` then
+renders. Getting that bounding node right took a real fix — see Design
+decisions. Its "open in full tree" link (`tree.html?node=<clade_node_id>`)
+reuses the exact same reveal-and-scroll path the search box uses, just
+triggered from a URL parameter read once at load instead of user input.
 
 ## Database schema (`data/nidatlas.db`)
 
@@ -313,6 +370,25 @@ called by anything else in the repo.
   tree placement" as a valid non-error outcome (empty list / a clearly
   labeled `ValueError`), never a guessed-at placement. See
   `fetch_phylogeny.py`'s own report (rerun it) for the current, exact list.
+- **`phylo_closest_relatives`'s "distance" is a raw node-hop count, not an
+  ultrametric measure — so "bound the whole neighbourhood" needs the MRCA
+  of the FULL set, not just the two farthest-apart members.** Caught while
+  building the tree-view frontend: `GET /api/species/{id}/relatives` used
+  to compute `clade_node_id` (the node bounding a species' shown
+  neighbourhood, used both to fetch that neighbourhood as a subtree and to
+  link "open in full tree") as `phylo_mrca(species, farthest_listed_relative)`.
+  That's unsafe, because OToL's single-child synthesis chains (see the
+  storage bullet above) inflate hop-count on some branches but not others —
+  concretely, among Turdus merula's 6 closest relatives by this metric, the
+  MRCA with the *farthest*-ranked one (Turdus naumanni) excluded two
+  *nearer*-ranked ones (Turdus philomelos, Turdus viscivorus) entirely,
+  since their shared ancestor with merula sat outside naumanni's. Fixed by
+  `phylo_mrca_of_node_ids` in `src/queries.py`: the true MRCA of every node
+  in the set at once (a `phylo_closure` join grouped by ancestor, keeping
+  only ancestors common to ALL of them, deepest wins) — see
+  `test_species_relatives_finds_congeneric_species` in `tests/test_api.py`,
+  which asserts `clade_node_id` contains every listed relative, not just
+  the last one, specifically to keep this fixed.
 
 ## Conventions
 
@@ -349,30 +425,29 @@ called by anything else in the repo.
 
 **Done:** the full data pipeline (species list → cube → SQLite →
 vernacular names → administrative regions → phylogeny), the query layer and
-FastAPI backend with a 39-test pytest suite, and all three frontend pages
-(region map landing page, species atlas grid, species detail page) fully
-implemented and localized in pt/es/en with shared top-level MAP/ATLAS
-navigation. The BioCLIP 2 identification script works standalone but is
-**not yet wired into the web app** — there is no upload-a-photo flow in the
-UI yet, despite the README's original description mentioning one.
-Phylogeny is data-and-API-only so far: 577/584 species are placed in an
-Open Tree of Life-derived tree stored in `phylo_nodes`/`phylo_closure`,
-with `src/queries.py` functions for all four query patterns (closest
-relatives, MRCA, descendants-of-a-node, subtree rendering) and two of them
-exposed as endpoints (`/api/species/{id}/relatives`,
-`/api/phylo/{node_id}/subtree`) — but no frontend tree view consumes them
-yet (see **Next** below).
+FastAPI backend with a 40-test pytest suite, and all four frontend pages
+(region map landing page, species atlas grid, species detail page, tree of
+life view) fully implemented and localized in pt/es/en with shared
+top-level MAP/ATLAS/TREE navigation. The BioCLIP 2 identification script
+works standalone but is **not yet wired into the web app** — there is no
+upload-a-photo flow in the UI yet, despite the README's original
+description mentioning one. Phylogeny specifically: 577/584 species are
+placed in an Open Tree of Life-derived tree stored in
+`phylo_nodes`/`phylo_closure`, with `src/queries.py` functions for all four
+query patterns (closest relatives, MRCA, descendants-of-a-node, subtree
+rendering); `tree.html` renders the full tree as a navigable rectangular
+cladogram (`GET /api/phylo/root` + `GET /api/phylo/{id}/subtree`), and
+`species.html` shows each species' own local neighbourhood
+(`GET /api/species/{id}/relatives`) in the same style, both via the shared
+`static/cladogram.js` renderer.
 
 **In progress:** nothing actively broken. As of this file's writing, a
 substantial amount of work (the entire region map, the concentration-ratio
-ranking change, this rename, and the phylogeny data/query layer) is
+ranking change, this rename, and the phylogeny feature end to end) is
 complete and passing tests but **not yet committed to git** — run `git
 status` before assuming the working tree matches the last commit.
 
 **Next** (not yet started):
-- The actual phylogenetic tree *view* in the UI — the data and query layer
-  behind it are done (see **Done** above), but nothing in `static/` renders
-  it yet.
 - Species description text and real photos (every species card currently
   shows a placeholder thumbnail; there is no description field anywhere).
 - A private user sightings log — letting a user record their own
@@ -417,5 +492,5 @@ python -m pytest tests/test_api.py -q
 
 Requires `data/nidatlas.db` to exist and be fully built (species +
 regions + grid_cells assignment + phylogeny all populated) — the test suite
-hits the real FastAPI app against the real local database, not a mock. 39
+hits the real FastAPI app against the real local database, not a mock. 40
 tests, should all pass on a correctly rebuilt database.

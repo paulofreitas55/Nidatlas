@@ -11,9 +11,9 @@
     "es": "Datos de ocurrencia: GBIF.org, instantánea de {date} — solo registros con licencia CC0 y CC-BY."
   },
   "footer.attribution_line": {
-    "en": "Map data © {osm} contributors, {odbl}. Species identification: {bioclip} ({imageomics}).",
-    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}).",
-    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics})."
+    "en": "Map data © {osm} contributors, {odbl}. Species identification: {bioclip} ({imageomics}). Phylogeny: {opentree}.",
+    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}). Filogenia: {opentree}.",
+    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics}). Filogenia: {opentree}."
   },
 
   "nav.jump_to_order_aria": { "en": "Jump to order", "pt": "Ir para a ordem", "es": "Ir al orden" },
@@ -23,6 +23,7 @@
   "nav.primary_aria": { "en": "Primary navigation", "pt": "Navegação principal", "es": "Navegación principal" },
   "nav.map": { "en": "Map", "pt": "Mapa", "es": "Mapa" },
   "nav.atlas": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
+  "nav.tree": { "en": "Tree", "pt": "Árvore", "es": "Árbol" },
 
   "page.index_title": {
     "en": "Nidatlas — Birds of the Iberian Peninsula",
@@ -30,6 +31,11 @@
     "es": "Nidatlas — Aves de la Península Ibérica"
   },
   "page.species_fallback_title": { "en": "Species — Nidatlas", "pt": "Espécie — Nidatlas", "es": "Especie — Nidatlas" },
+  "page.tree_title": {
+    "en": "Nidatlas — Tree of Life",
+    "pt": "Nidatlas — Árvore da Vida",
+    "es": "Nidatlas — Árbol de la Vida"
+  },
 
   "atlas.page_title": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
   "atlas.no_match": {
@@ -70,6 +76,32 @@
   },
   "species.distribution_title": { "en": "Distribution", "pt": "Distribuição", "es": "Distribución" },
   "species.month_all": { "en": "All", "pt": "Todos", "es": "Todos" },
+
+  "species.phylo_title": {
+    "en": "Position in the tree of life",
+    "pt": "Posição na árvore da vida",
+    "es": "Posición en el árbol de la vida"
+  },
+  "species.phylo_loading": {
+    "en": "Loading tree position…",
+    "pt": "A carregar posição na árvore…",
+    "es": "Cargando posición en el árbol…"
+  },
+  "species.phylo_error": {
+    "en": "Could not load this species' position in the tree.",
+    "pt": "Não foi possível carregar a posição desta espécie na árvore.",
+    "es": "No se pudo cargar la posición de esta especie en el árbol."
+  },
+  "species.phylo_no_placement": {
+    "en": "This species isn't sampled by any study behind the current Open Tree of Life synthesis, so it has no confirmed position in this tree yet.",
+    "pt": "Esta espécie não está amostrada em nenhum estudo por trás da síntese atual da Open Tree of Life, pelo que ainda não tem uma posição confirmada nesta árvore.",
+    "es": "Esta especie no está muestreada en ningún estudio detrás de la síntesis actual de Open Tree of Life, por lo que aún no tiene una posición confirmada en este árbol."
+  },
+  "species.phylo_open_full_tree": {
+    "en": "Open in full tree →",
+    "pt": "Abrir na árvore completa →",
+    "es": "Abrir en el árbol completo →"
+  },
 
   "map.loading": { "en": "Loading…", "pt": "A carregar…", "es": "Cargando…" },
   "map.no_records": {
@@ -185,5 +217,30 @@
     "en": "Less common here than elsewhere",
     "pt": "Menos comum aqui do que noutras zonas",
     "es": "Menos común aquí que en otras zonas"
-  }
+  },
+
+  "tree.page_title": { "en": "Tree of Life", "pt": "Árvore da Vida", "es": "Árbol de la Vida" },
+  "tree.loading": { "en": "Loading tree…", "pt": "A carregar árvore…", "es": "Cargando árbol…" },
+  "tree.error_load": {
+    "en": "Could not load the tree of life.",
+    "pt": "Não foi possível carregar a árvore da vida.",
+    "es": "No se pudo cargar el árbol de la vida."
+  },
+  "tree.unresolved_tip": {
+    "en": "Unresolved placement",
+    "pt": "Posição não resolvida",
+    "es": "Posición no resuelta"
+  },
+  "tree.expand_aria": { "en": "Expand {name}", "pt": "Expandir {name}", "es": "Expandir {name}" },
+  "tree.collapse_aria": { "en": "Collapse {name}", "pt": "Recolher {name}", "es": "Colapsar {name}" },
+  "tree.node_species_count_one": { "en": "{count} species", "pt": "{count} espécie", "es": "{count} especie" },
+  "tree.node_species_count_other": { "en": "{count} species", "pt": "{count} espécies", "es": "{count} especies" },
+  "tree.search_aria": { "en": "Search species in the tree", "pt": "Pesquisar espécie na árvore", "es": "Buscar especie en el árbol" },
+  "tree.search_no_matches": { "en": "No matching species", "pt": "Nenhuma espécie encontrada", "es": "Ninguna especie encontrada" },
+  "tree.search_results_aria": { "en": "Search results", "pt": "Resultados da pesquisa", "es": "Resultados de la búsqueda" },
+  "tree.zoom_group_aria": { "en": "Zoom controls", "pt": "Controlos de zoom", "es": "Controles de zoom" },
+  "tree.zoom_in_aria": { "en": "Zoom in", "pt": "Aumentar zoom", "es": "Acercar zoom" },
+  "tree.zoom_out_aria": { "en": "Zoom out", "pt": "Diminuir zoom", "es": "Alejar zoom" },
+  "tree.zoom_reset": { "en": "Reset", "pt": "Repor", "es": "Restablecer" },
+  "tree.zoom_reset_aria": { "en": "Reset zoom to 100%", "pt": "Repor zoom a 100%", "es": "Restablecer zoom a 100%" }
 }

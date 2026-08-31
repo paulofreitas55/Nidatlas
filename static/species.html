@@ -29,6 +29,7 @@
     <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
       <a href="/" class="top-nav-link" data-i18n="nav.map">Map</a>
       <a href="/atlas" class="top-nav-link active" data-i18n="nav.atlas">Atlas</a>
+      <a href="/tree" class="top-nav-link" data-i18n="nav.tree">Tree</a>
     </nav>
   </header>
 
@@ -69,6 +70,13 @@
       <div id="map-panels" class="map-panels"></div>
       <p id="map-status" class="map-status" aria-live="polite"></p>
     </section>
+
+    <section id="phylogeny" class="phylogeny" hidden>
+      <h2 class="section-title" data-i18n="species.phylo_title">Position in the tree of life</h2>
+      <p id="phylo-status" class="map-status" aria-live="polite"></p>
+      <div id="phylo-canvas" class="cladogram-canvas" hidden></div>
+      <a id="phylo-open-tree-link" class="phylo-open-tree-link" hidden data-i18n="species.phylo_open_full_tree">Open in full tree →</a>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -83,6 +91,7 @@
   ></script>
   <script src="lang.js"></script>
   <script src="common.js"></script>
+  <script src="cladogram.js"></script>
   <script src="species.js"></script>
 </body>
 </html>

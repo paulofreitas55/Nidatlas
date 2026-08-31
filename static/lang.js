@@ -107,6 +107,7 @@ function renderFooter(lang) {
       odbl: `<a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>`,
       bioclip: `<a href="https://github.com/Imageomics/bioclip-2">BioCLIP 2</a>`,
       imageomics: "Imageomics Institute",
+      opentree: `<a href="https://tree.opentreeoflife.org">Open Tree of Life</a>`,
     });
   }
 }

@@ -12,17 +12,20 @@ on public GBIF occurrence data.
   month filter.
 - **Species atlas** — all ~584 Iberian bird species as a browsable,
   searchable card grid grouped by taxonomic order and family.
-- **Species pages** — a seasonality chart and a distribution map (down to a
+- **Species pages** — a seasonality chart, a distribution map (down to a
   10km grid cell) for any individual species, including archipelago-aware
-  views for island endemics.
+  views for island endemics, and its position in the tree of life with its
+  closest relatives.
+- **Tree of life** — the full phylogeny (Open Tree of Life) for every
+  placed species, as a navigable rectangular cladogram.
 - Fully localised in **Portuguese, Spanish and English**.
 
 A BioCLIP 2-based photo identification script (`scripts/identify.py`)
 exists and works standalone from the command line, but is not yet wired
 into the web app — uploading a photo through the site isn't possible yet.
 See [CLAUDE.md](CLAUDE.md)'s "Current state" section for what's built vs.
-planned (a phylogenetic tree view, species descriptions/photos, a personal
-sightings log, and deployment are the next pieces of work).
+planned (species descriptions/photos, a personal sightings log, and
+deployment are the next pieces of work).
 
 ## Tech stack
 

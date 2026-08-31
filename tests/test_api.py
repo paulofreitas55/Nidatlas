@@ -381,21 +381,63 @@ def phylo_root_id(db_conn: sqlite3.Connection) -> int:
     return db_conn.execute("SELECT id FROM phylo_nodes WHERE parent_id IS NULL").fetchone()[0]
 
 
-def test_species_relatives_finds_congeneric_species(client: TestClient) -> None:
+def test_phylo_root_matches_the_only_parentless_node(
+    client: TestClient, phylo_root_id: int
+) -> None:
+    # The frontend must discover the root through this endpoint, never by
+    # hardcoding an id -- phylo_nodes.id is rebuild-dependent (see CLAUDE.md).
+    response = client.get("/api/phylo/root")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["node_id"] == phylo_root_id
+    assert body["name"] is not None  # the root happens to be a named taxon (Neognathae)
+
+
+def test_species_relatives_finds_congeneric_species(
+    client: TestClient, db_conn: sqlite3.Connection
+) -> None:
     # 566 = Turdus merula (Common Blackbird, see
     # test_species_profile_includes_dex_number_and_vernacular_names above).
     # Turdus iliacus (Redwing) is another Turdus species in the atlas, so it
     # should show up among the very closest relatives by tree topology.
-    response = client.get("/api/species/566/relatives", params={"limit": 20})
+    # limit=6 matches what species.js actually requests -- deliberately not
+    # a bigger number, since limit=6 is exactly the scenario that caught a
+    # real bug (see phylo_mrca_of_node_ids's docstring): among Turdus
+    # merula's 6 closest relatives by raw distance, the farthest-ranked one
+    # (Turdus naumanni) does NOT sit in the same branch as two nearer-ranked
+    # ones (Turdus philomelos, Turdus viscivorus), so their MRCA excludes
+    # those two entirely -- only the true MRCA of the whole set is safe.
+    response = client.get("/api/species/566/relatives", params={"limit": 6})
     assert response.status_code == 200
-    relatives = response.json()
-    assert len(relatives) > 0
+    body = response.json()
+    assert body["species_id"] == 566
+
+    expected_node_id = db_conn.execute("SELECT id FROM phylo_nodes WHERE species_id = 566").fetchone()[0]
+    assert body["node_id"] == expected_node_id
+    assert body["clade_node_id"] is not None
+
+    relatives = body["relatives"]
+    assert len(relatives) == 6
     assert any(r["gbif_name"] == "Turdus iliacus" for r in relatives)
+    assert any(r["gbif_name"] == "Turdus philomelos" for r in relatives)
+    assert any(r["gbif_name"] == "Turdus viscivorus" for r in relatives)
 
     distances = [r["distance"] for r in relatives]
     assert distances == sorted(distances)
     for r in relatives:
         assert r["species_id"] != 566  # never lists the species itself
+        assert isinstance(r["node_id"], int)
+
+    # clade_node_id must actually be an ancestor of the species AND of
+    # EVERY listed relative -- not just the farthest-ranked one (that
+    # narrower check is exactly what let the bug above slip through).
+    descendant_ids = [expected_node_id] + [r["node_id"] for r in relatives]
+    for descendant_id in descendant_ids:
+        is_ancestor = db_conn.execute(
+            "SELECT 1 FROM phylo_closure WHERE ancestor_id = ? AND descendant_id = ?",
+            (body["clade_node_id"], descendant_id),
+        ).fetchone()
+        assert is_ancestor is not None, f"clade_node_id does not contain node {descendant_id}"
 
 
 def test_species_relatives_unknown_species_gives_404(client: TestClient) -> None:
@@ -410,7 +452,8 @@ def test_species_relatives_species_with_no_tree_placement_returns_empty(client: 
     # has no placement in this tree, so this must be an empty 200, not an error.
     response = client.get("/api/species/289/relatives")
     assert response.status_code == 200
-    assert response.json() == []
+    body = response.json()
+    assert body == {"species_id": 289, "node_id": None, "clade_node_id": None, "relatives": []}
 
 
 def test_phylo_subtree_root_contains_every_placed_species(

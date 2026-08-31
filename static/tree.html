@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nidatlas — Tree of Life</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tree.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark"><a href="/">Nidatlas</a></h1>
+        <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+    <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
+      <a href="/" class="top-nav-link" data-i18n="nav.map">Map</a>
+      <a href="/atlas" class="top-nav-link" data-i18n="nav.atlas">Atlas</a>
+      <a href="/tree" class="top-nav-link active" data-i18n="nav.tree">Tree</a>
+    </nav>
+  </header>
+
+  <main id="tree-main" class="tree-main">
+    <h2 class="page-title" data-i18n="tree.page_title">Tree of Life</h2>
+    <p id="load-status" class="status" aria-live="polite" data-i18n="tree.loading">Loading tree…</p>
+
+    <div id="tree-content" class="tree-content" hidden>
+      <div class="tree-toolbar">
+        <div class="tree-search">
+          <input
+            type="search"
+            id="tree-search-input"
+            class="search-box"
+            data-i18n-placeholder="common.search_placeholder"
+            data-i18n-aria-label="tree.search_aria"
+            autocomplete="off"
+          >
+          <ul id="tree-search-results" class="tree-search-results" hidden data-i18n-aria-label="tree.search_results_aria"></ul>
+        </div>
+        <div class="tree-zoom-controls" role="group" data-i18n-aria-label="tree.zoom_group_aria">
+          <button type="button" id="tree-zoom-out" class="tree-zoom-btn" data-i18n-aria-label="tree.zoom_out_aria">−</button>
+          <span id="tree-zoom-level" class="tree-zoom-level">100%</span>
+          <button type="button" id="tree-zoom-in" class="tree-zoom-btn" data-i18n-aria-label="tree.zoom_in_aria">+</button>
+          <button type="button" id="tree-zoom-reset" class="tree-zoom-reset" data-i18n="tree.zoom_reset" data-i18n-aria-label="tree.zoom_reset_aria">Reset</button>
+        </div>
+      </div>
+      <div id="tree-scroll" class="tree-scroll">
+        <div id="tree-canvas" class="cladogram-canvas"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p id="footer-data-line"></p>
+    <p id="footer-attribution-line"></p>
+  </footer>
+
+  <script src="lang.js"></script>
+  <script src="cladogram.js"></script>
+  <script src="tree.js"></script>
+</body>
+</html>

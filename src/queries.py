@@ -537,12 +537,26 @@ def search_species(conn: sqlite3.Connection, text: str) -> list[dict]:
 # clearly-labeled ValueError, never a silent guess at where it might go).
 
 
-def _phylo_node_id_for_species(conn: sqlite3.Connection, species_id: int) -> int | None:
+def phylo_species_node_id(conn: sqlite3.Connection, species_id: int) -> int | None:
+    """The species' own tip node id, or None if it has no placement in this
+    tree (see module note above) -- public since api.py's /relatives route
+    needs it directly to build its response envelope, not just the other
+    phylo_* functions that use it internally."""
     exists = conn.execute("SELECT 1 FROM species WHERE id = ?", (species_id,)).fetchone()
     if exists is None:
         raise ValueError(f"no species with id {species_id}")
     row = conn.execute("SELECT id FROM phylo_nodes WHERE species_id = ?", (species_id,)).fetchone()
     return row[0] if row else None
+
+
+def phylo_tree_root(conn: sqlite3.Connection) -> dict:
+    # The root's own id isn't stable across a rebuild (see CLAUDE.md), so a
+    # caller (the tree view) must look it up fresh via this rather than
+    # ever hardcoding one.
+    nid, name, label = conn.execute(
+        "SELECT id, name, ott_node_label FROM phylo_nodes WHERE parent_id IS NULL"
+    ).fetchone()
+    return {"node_id": nid, "name": name, "ott_node_label": label}
 
 
 def phylo_closest_relatives(conn: sqlite3.Connection, species_id: int, limit: int = 10) -> list[dict]:
@@ -556,7 +570,7 @@ def phylo_closest_relatives(conn: sqlite3.Connection, species_id: int, limit: in
     # taking MIN(steps_up + c.depth) per candidate automatically selects the
     # true MRCA for that candidate, since routing through any shallower
     # shared ancestor only ever adds distance, never removes it.
-    node_id = _phylo_node_id_for_species(conn, species_id)
+    node_id = phylo_species_node_id(conn, species_id)
     if node_id is None:
         return []
 
@@ -572,7 +586,8 @@ def phylo_closest_relatives(conn: sqlite3.Connection, species_id: int, limit: in
             WHERE c.descendant_id != ?
             GROUP BY c.descendant_id
         )
-        SELECT s.id, s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en, candidates.distance
+        SELECT s.id, s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en,
+               candidates.distance, n.id
         FROM candidates
         JOIN phylo_nodes n ON n.id = candidates.relative_node_id
         JOIN species s ON s.id = n.species_id
@@ -586,9 +601,9 @@ def phylo_closest_relatives(conn: sqlite3.Connection, species_id: int, limit: in
         {
             "species_id": sid, "gbif_name": g,
             "common_name_pt": pt, "common_name_es": es, "common_name_en": en,
-            "distance": distance,
+            "distance": distance, "node_id": relative_node_id,
         }
-        for sid, g, pt, es, en, distance in rows
+        for sid, g, pt, es, en, distance, relative_node_id in rows
     ]
 
 
@@ -598,8 +613,8 @@ def phylo_mrca(conn: sqlite3.Connection, species_id_a: int, species_id_b: int) -
     # on why phylo_nodes.depth -- the node's OWN depth from root -- is what
     # this needs to sort by, not phylo_closure.depth, which only measures
     # distance to one side and would wrongly favor a shallow ancestor).
-    node_a = _phylo_node_id_for_species(conn, species_id_a)
-    node_b = _phylo_node_id_for_species(conn, species_id_b)
+    node_a = phylo_species_node_id(conn, species_id_a)
+    node_b = phylo_species_node_id(conn, species_id_b)
     if node_a is None:
         raise ValueError(f"species {species_id_a} has no placement in the phylogenetic tree")
     if node_b is None:
@@ -616,6 +631,46 @@ def phylo_mrca(conn: sqlite3.Connection, species_id_a: int, species_id_b: int) -
         LIMIT 1
         """,
         (node_a, node_b),
+    ).fetchone()
+    nid, name, label, rank, depth = row
+    return {"node_id": nid, "name": name, "ott_node_label": label, "rank": rank, "depth": depth}
+
+
+def phylo_mrca_of_node_ids(conn: sqlite3.Connection, node_ids: list[int]) -> dict:
+    # General N-way version of phylo_mrca, over already-known phylo_nodes
+    # ids rather than species ids -- used by api.py to bound a species'
+    # WHOLE shown neighbourhood (itself + every listed relative) in one
+    # node, for fetching/linking that exact neighbourhood as a subtree.
+    #
+    # Taking the MRCA of just the species and its single FARTHEST-listed
+    # relative is NOT a safe shortcut for this, and was a real bug caught
+    # while building the frontend for this: "distance" in
+    # phylo_closest_relatives is a raw node-hop count, not a branch-length
+    # or any other ultrametric measure, and OToL's induced_subtree often
+    # inserts long single-child synthesis chains (see
+    # build_phylogeny_db.py's module docstring) that inflate hop-count on
+    # one branch without inflating it on another. A relative with a
+    # SMALLER hop-distance can therefore still sit via a shallower shared
+    # ancestor than a "farther" one, i.e. OUTSIDE that farther relative's
+    # MRCA with the species -- observed directly: for Turdus merula's top
+    # 6 relatives, the MRCA with its farthest-ranked one (Turdus naumanni)
+    # excluded two nearer-ranked ones (Turdus philomelos, Turdus
+    # viscivorus) entirely. Only the true MRCA of the FULL set is
+    # guaranteed to contain every member.
+    distinct_ids = list(dict.fromkeys(node_ids))  # de-duplicate, preserve order (no set() -- irrelevant here, just clearer intent)
+    placeholders = ",".join("?" * len(distinct_ids))
+    row = conn.execute(
+        f"""
+        SELECT n.id, n.name, n.ott_node_label, n.rank, n.depth
+        FROM phylo_closure c
+        JOIN phylo_nodes n ON n.id = c.ancestor_id
+        WHERE c.descendant_id IN ({placeholders})
+        GROUP BY c.ancestor_id
+        HAVING COUNT(DISTINCT c.descendant_id) = ?
+        ORDER BY n.depth DESC
+        LIMIT 1
+        """,
+        (*distinct_ids, len(distinct_ids)),
     ).fetchone()
     nid, name, label, rank, depth = row
     return {"node_id": nid, "name": name, "ott_node_label": label, "rank": rank, "depth": depth}
@@ -652,10 +707,15 @@ def phylo_subtree(conn: sqlite3.Connection, node_id: int) -> dict:
     if exists is None:
         raise ValueError(f"no phylo node with id {node_id}")
 
+    # Vernacular names (not just gbif_name) are included here, not left for
+    # the frontend to fetch separately, because tree.js needs to label every
+    # tip with the active-language common name at render time -- fetching
+    # 577 species profiles individually just to show the tree would be far
+    # more expensive than joining them in once here.
     rows = conn.execute(
         """
         SELECT n.id, n.name, n.ott_node_label, n.ott_id, n.rank, n.parent_id, n.species_id, n.is_tip, n.depth,
-               s.gbif_name
+               s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en
         FROM phylo_closure c
         JOIN phylo_nodes n ON n.id = c.descendant_id
         LEFT JOIN species s ON s.id = n.species_id
@@ -669,8 +729,9 @@ def phylo_subtree(conn: sqlite3.Connection, node_id: int) -> dict:
             "id": nid, "name": name, "ott_node_label": label, "ott_id": ott_id, "rank": rank,
             "parent_id": parent_id, "species_id": species_id, "is_tip": bool(is_tip), "depth": depth,
             "gbif_name": gbif_name,
+            "common_name_pt": pt, "common_name_es": es, "common_name_en": en,
         }
-        for nid, name, label, ott_id, rank, parent_id, species_id, is_tip, depth, gbif_name in rows
+        for nid, name, label, ott_id, rank, parent_id, species_id, is_tip, depth, gbif_name, pt, es, en in rows
     ]
     return {"root_id": node_id, "node_count": len(nodes), "nodes": nodes}
 

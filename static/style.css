@@ -611,6 +611,125 @@ main {
   font-weight: 600;
 }
 
+/* Cladogram (static/cladogram.js) -- shared by tree.html's full tree view
+   and species.html's "Position in the tree of life" section, both of which
+   only build the small node graph and let cladogram.js lay it out and draw
+   it as plain SVG (no graph library). */
+
+.cladogram-canvas {
+  overflow-x: auto; /* a deep/wide slice can exceed the viewport -- scroll it, never wrap or clip */
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-box);
+  padding: 0.5rem;
+}
+
+.cladogram-svg {
+  display: block;
+  font-family: var(--font-sans);
+}
+
+.cladogram-edge {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.cladogram-dot {
+  fill: var(--green);
+}
+
+.cladogram-label {
+  font-size: 0.78rem;
+  fill: var(--ink);
+}
+
+.cladogram-node.is-tip .cladogram-label {
+  font-family: var(--font-serif);
+  font-style: italic;
+}
+
+.cladogram-node.is-internal .cladogram-label {
+  font-size: 0.72rem;
+  fill: var(--muted);
+}
+
+/* A tip with no resolved species (see CLAUDE.md's "not every species has a
+   phylogeny placement") -- dimmed and unlinked, never mistaken for a real
+   result. */
+.cladogram-node.is-muted .cladogram-dot {
+  fill: var(--line);
+}
+
+.cladogram-node.is-muted .cladogram-label {
+  fill: var(--muted);
+  font-style: italic;
+}
+
+.cladogram-node.is-highlighted .cladogram-dot {
+  fill: var(--accent);
+}
+
+.cladogram-node.is-highlighted .cladogram-label {
+  font-weight: 700;
+  fill: var(--accent);
+}
+
+/* tree.js's search/deep-link target -- applied directly to a node after the
+   fact (not baked into the initial render like is-highlighted above), since
+   which tip is "found" changes without a full re-render. */
+.cladogram-node.is-search-highlight .cladogram-dot {
+  fill: var(--accent);
+}
+
+.cladogram-node.is-search-highlight .cladogram-label {
+  font-weight: 700;
+  fill: var(--accent);
+}
+
+.cladogram-node a .cladogram-label {
+  fill: var(--green);
+}
+
+.cladogram-node a:hover .cladogram-label,
+.cladogram-node a:focus-visible .cladogram-label {
+  fill: var(--accent);
+}
+
+.cladogram-node.is-clickable {
+  cursor: pointer;
+}
+
+.cladogram-node.is-clickable:hover .cladogram-label,
+.cladogram-node.is-clickable:focus-visible .cladogram-label {
+  fill: var(--green);
+}
+
+.cladogram-node.is-clickable:focus-visible .cladogram-dot {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Aligned tip labels (tree.js's full-tree view, renderCladogram's alignTips
+   option): a dashed guide from the tip's real branch position out to the
+   shared label column on the right -- the dot itself stays put so the
+   topology reads correctly, only the label is flush-aligned. */
+.cladogram-tip-extension {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+/* A clade the user has manually collapsed (tree.js) -- children hidden,
+   drawn as a solid larger marker so it reads as "more here", not a dead end. */
+.cladogram-node.is-collapsed .cladogram-dot {
+  fill: var(--accent);
+}
+
+.cladogram-node.is-collapsed .cladogram-label {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
 /* Wider screens: more nav breathing room, more columns per row */
 
 @media (min-width: 480px) {
