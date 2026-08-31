@@ -4,6 +4,8 @@ A web atlas of the birds of the Iberian Peninsula — Portugal and Spain,
 including the Azores, Madeira, the Canary Islands and the Balearics — built
 on public GBIF occurrence data.
 
+![Nidatlas region map](docs/screenshot.png)
+
 ## What it does
 
 - **Region map** (the landing page) — every district, province and named
@@ -12,20 +14,33 @@ on public GBIF occurrence data.
   month filter.
 - **Species atlas** — all ~584 Iberian bird species as a browsable,
   searchable card grid grouped by taxonomic order and family.
-- **Species pages** — a seasonality chart, a distribution map (down to a
-  10km grid cell) for any individual species, including archipelago-aware
-  views for island endemics, and its position in the tree of life with its
-  closest relatives.
+- **Species pages** — a photo (see Photo credits below), a seasonality
+  chart, a distribution map (down to a 10km grid cell) for any individual
+  species, including archipelago-aware views for island endemics, and its
+  position in the tree of life with its closest relatives.
 - **Tree of life** — the full phylogeny (Open Tree of Life) for every
   placed species, as a navigable rectangular cladogram.
+- **Rank** — every species ordered by raw recorded-occurrence count, most
+  and least, clearly labelled as observation records rather than actual
+  abundance (see the Region map for relative commonness by area).
 - Fully localised in **Portuguese, Spanish and English**.
 
 A BioCLIP 2-based photo identification script (`scripts/identify.py`)
 exists and works standalone from the command line, but is not yet wired
 into the web app — uploading a photo through the site isn't possible yet.
 See [CLAUDE.md](CLAUDE.md)'s "Current state" section for what's built vs.
-planned (species descriptions/photos, a personal sightings log, and
+planned (species description text, a personal sightings log, and
 deployment are the next pieces of work).
+
+### Photo credits
+
+Every species photo is hotlinked from iNaturalist (research-grade,
+community-licensed observations) or, as a fallback, Wikidata/Commons —
+never downloaded or re-hosted. Only CC0 and CC-BY images are used; CC-BY-SA
+is deliberately excluded (see CLAUDE.md's "Species photo cascade" design
+decision for why, and the measured coverage cost of that choice). Each
+photo is shown with its photographer's name and licence, and links back to
+the original observation or file page.
 
 ## Tech stack
 

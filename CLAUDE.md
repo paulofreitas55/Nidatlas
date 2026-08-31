@@ -44,7 +44,7 @@ local/dev-oriented choice (see the comment in `api.py`), revisit before a
 real public deployment where you'd want real caching back.
 
 **Frontend** (`static/`, no build step, no framework, no bundler — plain
-`<script>` tags): four pages sharing common CSS/JS.
+`<script>` tags): five pages sharing common CSS/JS.
 - `map.html` + `map.css` + `map.js` — the landing page (served at `/`). The
   97-region choropleth, shaded by total occurrences, with an archipelago
   panel selector and a side panel showing per-region species rankings.
@@ -59,6 +59,21 @@ real public deployment where you'd want real caching back.
   species search box (see `phylogeny` below) — rendering all ~1,160 visible
   nodes at once turned out to be cheap (see the render-time note below), so
   there's no level-by-level navigation to maintain.
+- `rank.html` + `rank.css` + `rank.js` — served at `/rank`. Two lists (most-
+  and least-recorded species, top/bottom 50 by default, expandable to the
+  full 584) ranked strictly by raw `total_occurrences` — a deliberately
+  different axis from the map's per-region concentration ranking and the
+  atlas's taxonomic ordering, with an explicit on-page note (`rank.explainer`
+  in i18n.json) so a record count is never mistaken for actual abundance.
+  Backed by `GET /api/species/ranking`, which reuses `species_profile`'s own
+  `RANK() OVER (ORDER BY total_occurrences DESC)` so a species' position here
+  always agrees with the "X of 584" figure on its own page — see
+  `species_ranking` in `src/queries.py`. The full-584 view (toggled via
+  "View full ranking") always opens scrolled to rank #1, not wherever the
+  toggle button happened to sit on the page, and has its own name/vernacular
+  search box (`rank-full-search`) that filters that one list in place —
+  separate from the top/bottom-50 default view, which has no search of its
+  own since 50 rows needs no filtering aid.
 - `cladogram.js` — the shared rectangular-cladogram SVG renderer behind both
   `tree.js` and `species.js`'s tree section: given a small node graph (id,
   children, label, tip/clickable/muted flags), it lays out and draws it,
@@ -73,9 +88,9 @@ real public deployment where you'd want real caching back.
   lookup, and the declarative `data-i18n*` attribute binder. Loaded by every
   page before its own script.
 - `style.css` — shared header, footer, card, map-panel, and cladogram
-  (`.cladogram-*`) styles across all four pages. `species.css`/`map.css`/
-  `tree.css` hold only what's specific to that one page — check `style.css`
-  first before assuming a rule needs to be added per-page.
+  (`.cladogram-*`) styles across all five pages. `species.css`/`map.css`/
+  `tree.css`/`rank.css` hold only what's specific to that one page — check
+  `style.css` first before assuming a rule needs to be added per-page.
 - `i18n.json` — every UI string in the app, keyed by dotted key
   (`"page.title": {"en": ..., "pt": ..., "es": ...}`). See Conventions.
 
@@ -135,7 +150,7 @@ triggered from a URL parameter read once at load instead of user input.
 
 | Table | Columns | Purpose |
 |---|---|---|
-| `species` | `id`, `gbif_name` (UNIQUE), `bioclip_name`, `genus`, `family`, `"order"`, `total_occurrences`, `common_name_pt/es/en` | One row per Iberian bird species (584 currently). `gbif_name` is GBIF's accepted scientific name; `bioclip_name` is what BioCLIP 2's vocabulary calls it (differs when `data/taxonomy_synonyms.csv` maps one to the other). `common_name_*` are populated later by `fetch_vernacular_names.py`, nullable until then. |
+| `species` | `id`, `gbif_name` (UNIQUE), `bioclip_name`, `genus`, `family`, `"order"`, `total_occurrences`, `common_name_pt/es/en`, `image_url`, `image_source`, `image_license`, `image_attribution`, `image_source_url` | One row per Iberian bird species (584 currently). `gbif_name` is GBIF's accepted scientific name; `bioclip_name` is what BioCLIP 2's vocabulary calls it (differs when `data/taxonomy_synonyms.csv` maps one to the other). `common_name_*` are populated later by `fetch_vernacular_names.py`, nullable until then. `image_*` are populated later by `fetch_species_images.py`, nullable until then (currently 584/584 populated, but the columns stay nullable since a future added species isn't guaranteed a match from either source) — `image_url` is always a hotlinked third-party URL, never a locally-stored file (see Design decisions); `image_source` is `"inaturalist"` or `"wikidata"`; `image_license` is `"cc0"` or `"cc-by"` (never anything else — see the CC-BY-SA exclusion decision); `image_attribution` is a ready-to-display credit string in one consistent format regardless of source; `image_source_url` links to the original observation (iNaturalist) or file page (Commons) for provenance. |
 | `regions` | `id`, `region_key` (UNIQUE), `name_pt/es/en`, `kind` (`district_province`/`island`/`fallback`), `source_nuts_id`, `total_occurrences` | Administrative regions: 73 mainland districts/provinces + 24 individually-named archipelago islands + 1 fallback ("Alto-mar"/"Open sea" — cells too far from any real region). `region_key` is stable across rebuilds (used for upserts); `id` is not, so never hardcode a region `id` anywhere. `total_occurrences` is precomputed by `assign_regions.py`, not computed live (see Design decisions). |
 | `grid_cells` | `mgrs_cell` (PK), `centroid_lat`, `centroid_lon`, `region_id`, `region_name` | One row per MGRS 10km cell that has any occurrence data. `region_id`/`region_name` are populated by `assign_regions.py`, not `build_database.py` — a fresh DB has these columns but they're empty until you run that script. |
 | `species_cell` | `species_id`, `mgrs_cell`, `occurrences`, `family_occurrences` | Species × cell occurrence counts, annual total. `family_occurrences` is the same cell's total across every species in that family — the denominator for the (now-secondary) share-of-family metric. |
@@ -226,6 +241,22 @@ request time. `data/` itself is gitignored — every file in it, including
    `data/opentree_resolutions.json` to exist.** Safe to rerun any time;
    always wipes and repopulates both tables from scratch rather than
    accumulating.
+10. **`fetch_species_images.py`** — fetches one canonical, commercially-usable
+    photo per species: iNaturalist first (`photo_license=cc0,cc-by`,
+    research-grade, most-faved observation), Wikidata/Commons (P18, CC0/CC-BY
+    only) as a fallback for whatever iNaturalist misses. Currently 584/584
+    species covered, entirely from iNaturalist (the Wikidata/Commons fallback
+    is exercised, but wasn't actually needed on the real run). Populates
+    `species.image_*` (see Database schema above). Independent of steps 5-9
+    except needing `species` to already exist (step 3). Every API response is
+    cached under `data/` (`inat_taxa_raw.json`, `inat_observations_raw.json`
+    — filtered before caching, NOT the raw response, see Design decisions —
+    `wikidata_images_raw.json`, `commons_metadata_raw.json`), keyed by the
+    exact query used, so a rerun only fetches names/ids not already tried —
+    safe to rerun any time; pass `--force` to refetch everything. See Design
+    decisions for the cascade order, the CC-BY-SA exclusion, the hotlinking
+    decision, and two real bugs caught building this (a search-endpoint
+    false negative, and the observations-cache size blowup).
 
 **`identify.py`** is not part of this pipeline — it's a standalone CLI
 (`python scripts/identify.py <image> [--species-list data/iberian_species.txt]`)
@@ -324,19 +355,22 @@ called by anything else in the repo.
   still authoritative for mainland district shapes (only GISCO has the
   internal administrative boundary lines between neighbouring districts —
   there's no OSM equivalent to swap in there).
-- **Schema duplication between `build_database.py` and both
-  `assign_regions.py` and `build_phylogeny_db.py`.** `build_database.py`'s
-  `SCHEMA` string is the canonical definition of every table, but both of
-  the other two scripts carry their own second copy of the tables they
-  populate (`regions`/`grid_cells.region_id`/`region_name` for the former,
-  `phylo_nodes`/`phylo_closure` for the latter) behind an `ensure_schema()`
-  using `CREATE TABLE IF NOT EXISTS`/`ALTER TABLE ... ADD COLUMN`, so each
-  stays safely re-runnable against a database that already has real data,
-  without requiring a full `build_database.py` rebuild first (which would
-  also throw away the other one's populated data). Nothing enforces these
-  definitions agree — if you change a table's shape in `build_database.py`,
-  you must update the matching `ensure_schema()` by hand in whichever
-  script(s) also touch that table, or they will silently drift apart.
+- **Schema duplication between `build_database.py` and every script that
+  enriches an existing table.** `build_database.py`'s `SCHEMA` string is the
+  canonical definition of every table, but four other scripts each carry
+  their own second copy of the columns/tables they populate, behind an
+  `ensure_schema()`/`ensure_columns()` using `CREATE TABLE IF NOT EXISTS`/
+  `ALTER TABLE ... ADD COLUMN`: `assign_regions.py`
+  (`regions`/`grid_cells.region_id`/`region_name`), `build_phylogeny_db.py`
+  (`phylo_nodes`/`phylo_closure`), `fetch_vernacular_names.py`
+  (`species.common_name_*`), and `fetch_species_images.py`
+  (`species.image_*`). Each stays safely re-runnable against a database
+  that already has real data, without requiring a full `build_database.py`
+  rebuild first (which would also throw away every other script's
+  populated data). Nothing enforces these definitions agree — if you change
+  a table's shape in `build_database.py`, you must update the matching
+  `ensure_schema()`/`ensure_columns()` by hand in whichever script(s) also
+  touch that table, or they will silently drift apart.
 - **Phylogeny storage: adjacency list + closure table, not nested sets or a
   materialized path** (`phylo_nodes.parent_id` + `phylo_closure`). Chosen
   against the four query patterns `src/queries.py`'s `phylo_*` functions
@@ -389,6 +423,164 @@ called by anything else in the repo.
   `test_species_relatives_finds_congeneric_species` in `tests/test_api.py`,
   which asserts `clade_node_id` contains every listed relative, not just
   the last one, specifically to keep this fixed.
+- **Rank view: competition ranking (`RANK()`), not `ROW_NUMBER()`, with
+  `gbif_name` as an alphabetical tiebreak.** `species_ranking` in
+  `src/queries.py` orders by `RANK() OVER (ORDER BY total_occurrences DESC)`
+  specifically so species tied on the exact same count (real ties exist —
+  e.g. two species both sit at exactly 4 occurrences) get the SAME rank
+  number, matching the same `RANK()` already used for a species' own
+  "X of 584" figure on its own page (`species_profile`'s `global_rank`). A
+  plain `ROW_NUMBER()` would instead silently imply one of two identically-
+  recorded species is "more recorded" than the other, which isn't true —
+  see `test_species_ranking_ties_share_the_same_rank_number` in
+  `tests/test_api.py`. `gbif_name` breaks ties only in the SQL `ORDER BY`
+  (row iteration order, for deterministic/reproducible API responses), not
+  in the rank NUMBER itself — two tied species still show the same `#N`.
+- **Cladogram rendering: pure SVG via `document.createElementNS`, no graph
+  library, one render pass rather than incremental layout.** `cladogram.js`
+  is deliberately minimal — given a small node graph (id, children, label,
+  tip/clickable/muted flags) it lays out and draws it, nothing more,
+  knowing nothing about phylogeny, the API, or i18n (see the Frontend
+  section above). This was viable specifically because the full tree
+  (~1,160 nodes after collapsing single-child chains) measured at ~20ms to
+  render in a real headless-Chrome test — a library (D3, or a dedicated
+  tree/graph package) would have added a real dependency to solve a
+  performance problem this project doesn't actually have. If a future
+  change makes the node count much larger (e.g. rendering un-collapsed,
+  or a much bigger species list), re-measure before assuming this still
+  holds — the design explicitly trades "handles arbitrary scale" for
+  "simple and fast at this scale."
+- **Species photo cascade: iNaturalist first, Wikidata/Commons only as a
+  fallback — decided from a measurement, not defaulted to.** Before
+  building `fetch_species_images.py`, a 50-species sample (spanning common
+  mainland birds, scarce mainland species and island endemics) was queried
+  against both sources. Wikidata had a P18 image for 98% of the sample, but
+  after filtering to commercially-usable licences that dropped to 40% — 59%
+  of Wikidata's own bird images turned out to be CC-BY-SA, the single
+  largest licence bucket there (bigger than CC-BY, far bigger than CC0).
+  iNaturalist, filtered server-side to `photo_license=cc0,cc-by` and
+  research-grade observations, hit **100%** coverage on the same sample,
+  including every island endemic and a genuinely local specialist
+  (*Chersophilus duponti*, Dupont's Lark, with only 25 qualifying
+  observations worldwide at measurement time). iNaturalist was chosen as
+  the PRIMARY source (not just the higher-coverage one) for a second,
+  independent reason: its photos are field observations in natural
+  habitat, visually consistent with each other, whereas Wikidata's P18
+  often points at a mixed bag of studio, museum-specimen or captive-bird
+  photos — a worse fit for an occurrence atlas. Mixing the two roughly
+  40/60 would have bought no extra coverage (iNaturalist alone already
+  covered the sample) at the cost of an inconsistent visual identity across
+  the atlas, so Wikidata/Commons is used ONLY for whatever iNaturalist
+  still misses on the full 584-species run. **CC-BY-SA is excluded from
+  BOTH sources**, not merely deprioritized — viral copyleft is incompatible
+  with a possible future commercial deployment, and the 59% figure above is
+  the measured, deliberate cost of that choice, not an oversight. See
+  ATTRIBUTIONS.md for the same figures recorded against the site's actual
+  licence policy, and `fetch_species_images.py`'s own module docstring for
+  the full writeup. The full run confirmed the sample's prediction: **584/584
+  species got an image from iNaturalist alone** (71 CC0, 513 CC-BY); the
+  Wikidata/Commons fallback path was exercised zero times on the real data,
+  not just rarely — it still earns its place in the code for whatever future
+  species join the atlas with sparser iNaturalist coverage, but it did no
+  work this run. 8 species failed on the first pass; investigating each one
+  by hand (not just re-trying blindly) found 2 were a bug in this project's
+  own matching code — `/v1/taxa`'s free-text search buried an exact match
+  outside its top 10 results for names like *Bubo bubo* even though the
+  taxon exists and is active, fixed by switching to `/v1/taxa/autocomplete`,
+  which is built for exact-name lookups and doesn't have this problem — and
+  6 were genuine GBIF-vs-iNaturalist taxonomy disagreements (recent genus
+  splits, a spelling difference, and one species GBIF/Wikidata rank as a
+  full species that iNaturalist's active taxonomy instead nests as a
+  subspecies — see `data/image_source_synonyms.csv` for the resolved list
+  and each one's specific reasoning). Both fixes were verified against the
+  live API and confirmed with the user before being applied, not guessed at.
+- **`fetch_species_images.py`'s observation cache is filtered before being
+  cached, not the literal raw API response, despite this file's usual
+  convention of caching responses verbatim.** Caught the hard way: the
+  first real 584-species run was killed after several hours once its
+  `data/inat_observations_raw.json` reached 2.5GB and was still growing —
+  each cached iNaturalist observation embeds a full nested taxon (with its
+  own ancestor chain and a Wikipedia summary paragraph), user, comments and
+  identifications, none of which this script ever reads, and the
+  checkpoint save re-serializes the WHOLE accumulated cache every 20
+  species, so the cost compounds (effectively O(n²) over the run). Fixed by
+  `_slim_observation()`: keep only the observation id, its fave count, and
+  each photo's id/url/licence/attribution before caching. Final cache size
+  for all 584 species: ~23MB, not gigabytes. If you ever see this cache
+  file growing unexpectedly large again, this is the first thing to check.
+  Separately, the SAME long run also died once outright to a plain
+  `TimeoutError` on one HTTP request (network hiccups are simply expected
+  over a ~30-minute run against two external APIs) — `_get_json` retries
+  transient failures (timeouts, connection errors, 429, 5xx) with backoff
+  now; a genuine 4xx still raises immediately rather than retrying
+  something that will never succeed.
+- **`species.image_attribution` is stored (and shown) in English only, even
+  though the rest of the UI is pt/es/en.** It's a factual credit
+  line (photographer name + a standard licence abbreviation like "CC BY"),
+  not prose — the same category of string as "OSM"/"BioCLIP 2" elsewhere in
+  this file, which nothing in the app translates either. iNaturalist's own
+  API returns this field in English regardless of the requester's locale,
+  so matching that for the Wikidata/Commons fallback (rather than
+  hand-rolling three-language attribution phrasing for a legal credit
+  line) keeps both sources' output genuinely uniform, not just
+  superficially so. Only the surrounding UI chrome around it (a "view
+  original" link, aria-labels) is localised normally.
+- **Two display forms of the same attribution, not two stored values.**
+  `buildPhotoCredit` in `lang.js` (shared by `app.js`, `rank.js`) takes an
+  `options.compact` flag: the atlas grid packs far more cards per screen
+  than the rank list or a species page, so it renders a shorter `"Photo:
+  {name}, (CC BY)"` there instead of the full `"Photo: {name}, some rights
+  reserved (CC BY)"` sentence — but both are derived client-side from the
+  SAME `image_attribution`/`image_license` fields (`photographerNameFrom`
+  just extracts the name back out of the full sentence), never a second
+  fetched/stored value. The full sentence is always still in the element's
+  `title`/aria-label regardless of which form is visibly shown. Rank rows
+  keep the full sentence despite being nearly as compact as atlas cards —
+  a deliberate choice, not an oversight, since only the atlas view was
+  reported as needing the extra space.
+- **Species photos are hotlinked, never downloaded.** `species.image_url`
+  always points at iNaturalist's own CDN (`inaturalist-open-data.s3.
+  amazonaws.com`) or Wikimedia's `upload.wikimedia.org`, not a local copy
+  under `static/`. Checked before deciding this, not assumed: Wikimedia
+  Commons' own documentation explicitly allows hotlinking to
+  `upload.wikimedia.org` (`Commons:Reusing content outside Wikimedia/
+  technical`) — it only discourages it, purely because a file can later be
+  renamed, replaced or deleted upstream with no notice to a hotlinker (a
+  reliability tradeoff accepted here, not a licensing one). iNaturalist's
+  API guidance instead cautions against heavy *downloading* specifically
+  (bulk media fetches over 5GB/hour or 24GB/day risk a permanent API
+  block) — hotlinking each photo through their own CDN on every page view
+  is the lighter-weight, policy-aligned choice, not a workaround of it.
+  Either way, the photo's own licence still requires attribution regardless
+  of hotlink vs. local copy, which is why `image_attribution` is built once
+  at fetch time in one format for both sources — `"Photo: {name}, some
+  rights reserved (CC BY)"` / `"Photo: {name}, no rights reserved (CC0)"`
+  (`build_display_attribution` in `fetch_species_images.py`) — the frontend
+  just displays the string, no per-source branching needed. This is NOT
+  iNaturalist's own raw `photo["attribution"]` string: that one omits the
+  photographer entirely for a CC0 photo (just `"no rights reserved"`, no
+  name), so the name is read from the observation's own uploader instead
+  (`user.name`, falling back to their `login`) for both licences, and the
+  same fixed template is used regardless of source.
+- **A CSS Grid item's automatic minimum size is its content's min-content
+  size — for a grid item containing an `<img>`, that's the image's own
+  INTRINSIC size, regardless of any `width`/`aspect-ratio` set on the
+  image itself.** Caught live: once real photos replaced the empty
+  placeholder `<span>`s on the atlas cards, the grid's columns stopped
+  being uniform — some cards were visibly wider than others, and the whole
+  grid could overflow horizontally. Root cause wasn't the image's own CSS
+  (`.card-thumb`'s `width:100%; aspect-ratio:1/1; object-fit:cover` was
+  already correct and, measured directly, DID render each image as a
+  perfect square) — it was `.species-card` (the actual grid item)'s
+  automatic minimum width being floored by its child image's intrinsic
+  pixel size (e.g. 1024px for iNaturalist's "large" size) under CSS Grid's
+  default `minmax(auto, 1fr)` track sizing. Fixed with `min-width: 0` on
+  `.species-card` — the standard, documented fix for this exact class of
+  bug — plus `max-width: 100%` on `.card-thumb` for defense-in-depth. If a
+  future grid/flex layout starts showing uneven tracks or unexplained
+  horizontal overflow right after adding an image (or any other
+  intrinsically-sized replaced element) to a grid/flex item, this is the
+  first thing to check.
 
 ## Conventions
 
@@ -402,6 +594,20 @@ called by anything else in the repo.
   HTML outside a `data-i18n`/`data-i18n-placeholder`/`data-i18n-aria-label`
   attribute or a `t()`/`tPlural()` call. Adding a string means adding a key
   there first, in all three languages, then referencing that key.
+- **`data/` is gitignored as a whole, but small hand-curated decision files
+  inside it are deliberately tracked anyway**, via explicit `!data/...`
+  negations in `.gitignore`: `taxonomy_synonyms.csv`,
+  `ott_taxonomy_synonyms.csv`, `ott_ambiguous_resolutions.csv`,
+  `image_source_synonyms.csv`. The principle: everything in `data/` that a
+  script can *derive* (the built SQLite DB, cached API responses, the
+  cleaned cube) stays out of git, since it's regenerable from source and
+  would just bloat the repo — but a file that records a *human decision*
+  (which OTT taxon to pick for a genuinely ambiguous name match, which
+  alternate name a source currently uses for a species) is exactly the
+  kind of thing that CAN'T be re-derived by rerunning a script, so it's
+  tracked like any other source file. If you add a new curated
+  gbif_name-to-something mapping file for a future data source, add its
+  own negation line here too — don't assume `data/*` will let it through.
 - **Explain before accepting on schema changes.** Every DB schema change in
   this project's history was preceded by a concrete before/after diagnosis
   (a query, a measured count, a sample) shown to the user, not just applied
@@ -424,11 +630,15 @@ called by anything else in the repo.
 ## Current state
 
 **Done:** the full data pipeline (species list → cube → SQLite →
-vernacular names → administrative regions → phylogeny), the query layer and
-FastAPI backend with a 40-test pytest suite, and all four frontend pages
-(region map landing page, species atlas grid, species detail page, tree of
-life view) fully implemented and localized in pt/es/en with shared
-top-level MAP/ATLAS/TREE navigation. The BioCLIP 2 identification script
+vernacular names → administrative regions → phylogeny → species photos),
+the query layer and FastAPI backend with a 46-test pytest suite, and all
+five frontend pages (region map landing page, species atlas grid, species
+detail page, tree of life view, occurrence-count ranking) fully implemented
+and localized in pt/es/en with shared top-level MAP/ATLAS/TREE/RANK
+navigation. Every species now has a real, commercially-usable, attributed
+photo (584/584 — see the "Species photo cascade" design decision) shown on
+its atlas card, its own page and the rank lists. The BioCLIP 2
+identification script
 works standalone but is **not yet wired into the web app** — there is no
 upload-a-photo flow in the UI yet, despite the README's original
 description mentioning one. Phylogeny specifically: 577/584 species are
@@ -442,21 +652,34 @@ cladogram (`GET /api/phylo/root` + `GET /api/phylo/{id}/subtree`), and
 `static/cladogram.js` renderer.
 
 **In progress:** nothing actively broken. As of this file's writing, a
-substantial amount of work (the entire region map, the concentration-ratio
-ranking change, this rename, and the phylogeny feature end to end) is
-complete and passing tests but **not yet committed to git** — run `git
-status` before assuming the working tree matches the last commit.
+substantial amount of work — the entire region map, the concentration-ratio
+ranking change, this rename, the phylogeny feature end to end, the Tree of
+Life and Rank views, and the species-photo pipeline (fetch, schema, and
+frontend wiring across atlas cards/species pages/rank rows) — is complete
+and passing tests but **not yet committed to git** — run `git status`
+before assuming the working tree matches the last commit.
 
-**Next** (not yet started):
-- Species description text and real photos (every species card currently
-  shows a placeholder thumbnail; there is no description field anywhere).
-- A private user sightings log — letting a user record their own
-  observations, geographically. This was part of the *original* product
-  vision (see README's earlier drafts) but has no schema, endpoint, or UI
-  yet, and would need real auth/user-identity design first.
-- Azure deployment: Docker, GitHub Actions CI/CD, and picking an actual
-  Azure hosting target. Nothing in the repo currently deploys anywhere;
-  everything described above runs locally only.
+**Next** (not yet started, roughly in this order):
+1. **Wire BioCLIP 2 into the web app.** `scripts/identify.py` works
+   standalone from the command line but there is no upload-a-photo flow in
+   the UI — no endpoint accepts an image, no page has an upload control.
+   This is the most-mentioned gap in this file (see "What this is" and
+   "Done" above) and the natural next feature, since the model, the
+   Iberian-species label filter, and now real reference photos per species
+   all already exist independently.
+2. **Azure deployment.** Docker, GitHub Actions CI/CD, and picking an
+   actual Azure hosting target. Nothing in the repo currently deploys
+   anywhere; everything described above runs locally only. Also the point
+   at which `src/api.py`'s `no-store` `Cache-Control` middleware (a
+   local-dev convenience — see Architecture above) needs revisiting for
+   real caching.
+3. Species description text — real photos are now wired in (see
+   `fetch_species_images.py` / the "Species photo cascade" design
+   decision), but there is still no descriptive text field anywhere.
+4. A private user sightings log — letting a user record their own
+   observations, geographically. This was part of the *original* product
+   vision (see README's earlier drafts) but has no schema, endpoint, or UI
+   yet, and would need real auth/user-identity design first.
 
 ## Running it locally
 
@@ -492,5 +715,5 @@ python -m pytest tests/test_api.py -q
 
 Requires `data/nidatlas.db` to exist and be fully built (species +
 regions + grid_cells assignment + phylogeny all populated) — the test suite
-hits the real FastAPI app against the real local database, not a mock. 40
+hits the real FastAPI app against the real local database, not a mock. 46
 tests, should all pass on a correctly rebuilt database.
