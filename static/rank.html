@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nidatlas — Rank</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="rank.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark"><a href="/">Nidatlas</a></h1>
+        <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+    <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
+      <a href="/" class="top-nav-link" data-i18n="nav.map">Map</a>
+      <a href="/atlas" class="top-nav-link" data-i18n="nav.atlas">Atlas</a>
+      <a href="/tree" class="top-nav-link" data-i18n="nav.tree">Tree</a>
+      <a href="/rank" class="top-nav-link active" data-i18n="nav.rank">Rank</a>
+    </nav>
+  </header>
+
+  <main>
+    <h2 class="page-title" data-i18n="rank.page_title">Rank</h2>
+    <p class="rank-explainer" data-i18n="rank.explainer">
+      Ranked by number of recorded GBIF observations across all of Iberia — this reflects how often a
+      species has been recorded. For relative commonness by area, see the Map view.
+    </p>
+    <p id="load-status" class="status" aria-live="polite" data-i18n="rank.loading">Loading ranking…</p>
+
+    <div id="rank-content" class="rank-content" hidden>
+      <div id="rank-columns" class="rank-columns">
+        <section class="rank-column">
+          <h3 data-i18n="rank.most_recorded_title">Most recorded species</h3>
+          <ol id="rank-most-list" class="rank-list"></ol>
+        </section>
+        <section class="rank-column">
+          <h3 data-i18n="rank.least_recorded_title">Least recorded species</h3>
+          <ol id="rank-least-list" class="rank-list"></ol>
+        </section>
+      </div>
+
+      <div id="rank-full" class="rank-full" hidden>
+        <h3 data-i18n="rank.full_ranking_title">Full ranking, most to least recorded</h3>
+        <input
+          type="search"
+          id="rank-full-search"
+          class="search-box"
+          data-i18n-placeholder="common.search_placeholder"
+          data-i18n-aria-label="common.search_aria"
+          autocomplete="off"
+        >
+        <ol id="rank-full-list" class="rank-list"></ol>
+      </div>
+
+      <button type="button" id="rank-toggle" class="rank-toggle-btn" data-i18n="rank.view_full">
+        View full ranking (all 584 species) →
+      </button>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p id="footer-data-line"></p>
+    <p id="footer-attribution-line"></p>
+  </footer>
+
+  <script src="lang.js"></script>
+  <script src="rank.js"></script>
+</body>
+</html>

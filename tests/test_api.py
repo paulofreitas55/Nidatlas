@@ -151,6 +151,79 @@ def test_all_species_dex_number_is_a_stable_1_to_584_sequence(client: TestClient
     assert [s["id"] for s in again] == [s["id"] for s in species]
 
 
+def test_species_ranking_covers_all_species_sorted_by_occurrences_desc(client: TestClient) -> None:
+    response = client.get("/api/species/ranking")
+    assert response.status_code == 200
+    ranking = response.json()
+    assert len(ranking) == 584
+
+    counts = [r["total_occurrences"] for r in ranking]
+    assert counts == sorted(counts, reverse=True)
+    for key in ("id", "gbif_name", "rank", "common_name_pt", "common_name_es", "common_name_en"):
+        assert key in ranking[0]
+
+
+def test_species_ranking_ties_share_the_same_rank_number(client: TestClient) -> None:
+    # RANK() (not ROW_NUMBER()): species tied on the same total_occurrences
+    # must show the same rank, not an arbitrary tie-broken position -- e.g.
+    # two species tied at 4 occurrences shouldn't be silently labelled #583
+    # and #584 as if one were more recorded than the other.
+    ranking = client.get("/api/species/ranking").json()
+    by_count: dict[int, set[int]] = {}
+    for r in ranking:
+        by_count.setdefault(r["total_occurrences"], set()).add(r["rank"])
+
+    tied_counts = {count: ranks for count, ranks in by_count.items() if len([r for r in ranking if r["total_occurrences"] == count]) > 1}
+    assert tied_counts  # sanity: the real data does contain ties
+    for count, ranks in tied_counts.items():
+        assert len(ranks) == 1, f"species tied at {count} occurrences have differing ranks: {ranks}"
+
+
+def test_species_ranking_rank_matches_species_profile_global_rank(
+    client: TestClient, madeirensis_id: int
+) -> None:
+    ranking = client.get("/api/species/ranking").json()
+    entry = next(r for r in ranking if r["id"] == madeirensis_id)
+
+    profile = client.get(f"/api/species/{madeirensis_id}").json()
+    assert entry["rank"] == profile["global_rank"]["rank"]
+
+
+def test_all_species_includes_image_columns_with_valid_shape(client: TestClient) -> None:
+    # Doesn't assert exact coverage numbers -- fetch_species_images.py hits
+    # live external APIs, so how many of the 584 end up with a photo can
+    # shift between reruns. What must always hold is the SHAPE: the columns
+    # exist on every row, and whenever image_url is set, the rest of that
+    # row's image_* fields are internally consistent with it.
+    species = client.get("/api/species/all").json()
+    for key in ("image_url", "image_source", "image_license", "image_attribution", "image_source_url"):
+        assert key in species[0]
+
+    with_image = [s for s in species if s["image_url"]]
+    assert with_image  # sanity: the fetch pipeline has actually run and found at least some images
+    for s in with_image:
+        assert s["image_license"] in ("cc0", "cc-by")  # never cc-by-sa or anything else -- see CLAUDE.md
+        assert s["image_source"] in ("inaturalist", "wikidata")
+        assert s["image_attribution"]
+        assert s["image_source_url"]
+        if s["image_source"] == "inaturalist":
+            assert "inaturalist" in s["image_url"]
+        else:
+            assert "wikimedia.org" in s["image_url"]
+
+
+def test_species_profile_includes_image_fields(client: TestClient, madeirensis_id: int) -> None:
+    profile = client.get(f"/api/species/{madeirensis_id}").json()
+    for key in ("image_url", "image_source", "image_license", "image_attribution", "image_source_url"):
+        assert key in profile
+
+
+def test_species_ranking_includes_image_fields(client: TestClient) -> None:
+    ranking = client.get("/api/species/ranking").json()
+    for key in ("image_url", "image_source", "image_license", "image_attribution", "image_source_url"):
+        assert key in ranking[0]
+
+
 def test_search_finds_species_by_portuguese_name(client: TestClient) -> None:
     response = client.get("/api/species", params={"q": "Melro"})
     assert response.status_code == 200

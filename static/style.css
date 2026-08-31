@@ -62,6 +62,7 @@ a {
    contains (search box, back link, ...). */
 .top-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   padding: 0 1rem 0.85rem;
 }
@@ -319,6 +320,16 @@ main {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.5rem;
+  /* Without this, a CSS Grid item's automatic minimum width defaults to
+     its content's min-content size -- for a grid item containing an <img>,
+     that's the image's own INTRINSIC width (e.g. 1024px for the "large"
+     iNaturalist size), regardless of any width:100%/aspect-ratio set on
+     the image itself. That silently forced this card's own grid column
+     wider than its "1fr" siblings once real photos replaced the empty
+     placeholder spans, breaking the grid's uniformity. min-width: 0 is the
+     standard fix: it lets the item shrink to the track's actual size
+     instead of being floored by its content. */
+  min-width: 0;
 }
 
 .species-card:hover,
@@ -341,10 +352,30 @@ main {
 .card-thumb {
   display: block;
   width: 100%;
+  max-width: 100%;
   aspect-ratio: 1 / 1;
   background: var(--paper-alt);
   border: 1px solid var(--line);
   border-radius: 4px;
+  object-fit: cover; /* only affects an <img> -- a no-op on the plain placeholder <span> used when a species has no photo */
+}
+
+/* Compact photo credit -- atlas cards and rank rows (species.image_attribution,
+   see CLAUDE.md's "Species photo cascade"). Deliberately reuses the SAME
+   attribution string shown in full on the species page rather than a
+   shortened variant: ellipsis truncation here still leaves it legible as
+   "there is a credit", the full text is one tap/click away on the species
+   page, and the untruncated string is still available via the title
+   attribute (a screen reader gets the full aria-label regardless of visual
+   truncation). */
+.photo-credit {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-name {

@@ -97,7 +97,7 @@ async function init() {
         statusEl.textContent =
           state.cells.length === 0
             ? t("map.no_records", state.lang)
-            : tPlural("map.cell_count", state.cells.length, state.lang, {
+            : tPlural("map.record_count", state.cells.length, state.lang, {
                 count: state.cells.length.toLocaleString(),
               });
       }
@@ -263,6 +263,29 @@ function buildNeighbourhoodNodes(rawNodes) {
 
 function renderIdentity() {
   const p = state.profile;
+
+  const photoWrap = document.getElementById("species-photo-wrap");
+  photoWrap.innerHTML = "";
+  photoWrap.appendChild(buildPhotoThumb(p, "thumb-placeholder"));
+  if (p.image_attribution) {
+    const credit = document.createElement("p");
+    credit.className = "species-photo-credit";
+
+    const attributionEl = document.createElement("span");
+    attributionEl.textContent = p.image_attribution;
+    credit.appendChild(attributionEl);
+
+    if (p.image_source_url) {
+      const link = document.createElement("a");
+      link.className = "species-photo-link";
+      link.href = p.image_source_url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = t("species.photo_view_original", state.lang);
+      credit.appendChild(link);
+    }
+    photoWrap.appendChild(credit);
+  }
 
   document.getElementById("dex-number").textContent = "#" + String(p.dex_number).padStart(3, "0");
   document.getElementById("species-name").textContent = p.gbif_name;
@@ -550,7 +573,7 @@ async function loadCells(month) {
   statusEl.textContent =
     cells.length === 0
       ? t("map.no_records", state.lang)
-      : tPlural("map.cell_count", cells.length, state.lang, { count: cells.length.toLocaleString() });
+      : tPlural("map.record_count", cells.length, state.lang, { count: cells.length.toLocaleString() });
 
   // Region is auto-picked once, on first load (see determineDefaultRegion) --
   // a species confined to one archipelago opens directly on it instead of an

@@ -44,7 +44,17 @@ CREATE TABLE species (
     -- Populated later by scripts/fetch_vernacular_names.py, not by this script.
     common_name_pt TEXT,
     common_name_es TEXT,
-    common_name_en TEXT
+    common_name_en TEXT,
+    -- Populated later by scripts/fetch_species_images.py, not by this script.
+    -- image_url is hotlinked (iNaturalist's own CDN or Wikimedia Commons),
+    -- never downloaded/mirrored -- see that script's module docstring for
+    -- why. image_source_url is the observation page (iNaturalist) or file
+    -- page (Commons) a viewer can click through to for full provenance.
+    image_url TEXT,
+    image_source TEXT,
+    image_license TEXT,
+    image_attribution TEXT,
+    image_source_url TEXT
 );
 
 -- Administrative regions (PT/ES NUTS3 districts/provinces, decomposed into

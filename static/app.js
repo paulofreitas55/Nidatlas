@@ -268,9 +268,7 @@ function renderCard(sp, query) {
   dex.textContent = "#" + String(sp.dex_number).padStart(3, "0");
   a.appendChild(dex);
 
-  const thumb = document.createElement("span");
-  thumb.className = "card-thumb";
-  a.appendChild(thumb);
+  a.appendChild(buildPhotoThumb(sp, "card-thumb"));
 
   const name = document.createElement("span");
   name.className = "card-name";
@@ -284,6 +282,9 @@ function renderCard(sp, query) {
     commonEl.textContent = common;
     a.appendChild(commonEl);
   }
+
+  const credit = buildPhotoCredit(sp, state.lang, { compact: true });
+  if (credit) a.appendChild(credit);
 
   if (query) {
     const match = matchInfo(sp, query, state.lang);

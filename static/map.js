@@ -91,6 +91,7 @@ async function init() {
   state.lang = initLangSwitch((lang) => {
     state.lang = lang;
     document.documentElement.lang = lang;
+    document.title = t("page.index_title", lang);
     applyStaticTranslations(lang);
     renderFooter(lang);
     relabelUI();
@@ -192,7 +193,7 @@ function relabelUI() {
 
     const statusEl = document.getElementById("map-status");
     if (group.id === "offshore") {
-      statusEl.textContent = tPlural("map.cell_count", state.offshoreCells.length, state.lang, {
+      statusEl.textContent = tPlural("map.record_count", state.offshoreCells.length, state.lang, {
         count: state.offshoreCells.length.toLocaleString(),
       });
     } else {
@@ -378,7 +379,7 @@ function renderOffshoreCells(group) {
   state.legendMap = panelMap;
 
   document.getElementById("map-status").textContent = tPlural(
-    "map.cell_count", state.offshoreCells.length, state.lang, { count: state.offshoreCells.length.toLocaleString() }
+    "map.record_count", state.offshoreCells.length, state.lang, { count: state.offshoreCells.length.toLocaleString() }
   );
 
   // Exactly one DB region sits behind every offshore cell (there is no

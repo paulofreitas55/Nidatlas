@@ -42,6 +42,13 @@
   color: var(--muted);
 }
 
+.species-photo-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
 .thumb-placeholder {
   display: block;
   width: 140px;
@@ -50,6 +57,30 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   margin: 0.3rem 0;
+  object-fit: cover; /* only affects an <img> -- a no-op on the plain placeholder <span> used when a species has no photo */
+}
+
+/* Full, untruncated species.image_attribution (unlike the compact,
+   ellipsis-truncated .photo-credit reused on atlas cards/rank rows --
+   see style.css) plus a link back to the original observation/file. */
+.species-photo-credit {
+  max-width: 140px;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.species-photo-link {
+  display: block;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.species-photo-link:hover,
+.species-photo-link:focus-visible {
+  color: var(--accent);
 }
 
 .species-name {
@@ -137,6 +168,22 @@
    style.css, shared with tree.html -- only this section's own "open in
    full tree" link is specific to this page. */
 
+/* Deliberately breaks out of .species-main's 720px reading-width column --
+   a cladogram (even a small one) needs real horizontal room to stay
+   legible, unlike the prose/figures above it, which stay narrow on
+   purpose. Standard full-bleed technique: span the viewport, capped at a
+   sane max-width, then re-center on the page's own axis (the same one
+   .species-main's margin:0 auto already centers on, since both are
+   centered relative to the same viewport). */
+.phylogeny {
+  width: 100vw;
+  max-width: 1000px;
+  margin-left: 50%;
+  transform: translateX(-50%);
+  padding: 0 1rem; /* matches .species-main's own side padding, since this section no longer sits inside it width-wise */
+  box-sizing: border-box;
+}
+
 .phylo-open-tree-link {
   display: inline-block;
   margin-top: 0.6rem;
@@ -168,5 +215,9 @@
     width: 120px;
     margin: 0;
     flex: 0 0 auto;
+  }
+
+  .species-photo-credit {
+    max-width: 120px;
   }
 }

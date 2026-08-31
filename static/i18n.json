@@ -3,6 +3,11 @@
   "common.search_placeholder": { "en": "Search species…", "pt": "Pesquisar espécies…", "es": "Buscar especies…" },
   "common.search_aria": { "en": "Search species by name", "pt": "Pesquisar espécies por nome", "es": "Buscar especies por nombre" },
   "common.loading_species": { "en": "Loading species…", "pt": "A carregar espécies…", "es": "Cargando especies…" },
+  "common.photo_credit_aria": {
+    "en": "Photo credit: {attribution}",
+    "pt": "Crédito da foto: {attribution}",
+    "es": "Crédito de la foto: {attribution}"
+  },
 
   "footer.snapshot_date": { "en": "28 August 2026", "pt": "28 de agosto de 2026", "es": "28 de agosto de 2026" },
   "footer.data_line": {
@@ -11,9 +16,9 @@
     "es": "Datos de ocurrencia: GBIF.org, instantánea de {date} — solo registros con licencia CC0 y CC-BY."
   },
   "footer.attribution_line": {
-    "en": "Map data © {osm} contributors, {odbl}. Species identification: {bioclip} ({imageomics}). Phylogeny: {opentree}.",
-    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}). Filogenia: {opentree}.",
-    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics}). Filogenia: {opentree}."
+    "en": "Map data © {osm} contributors, {odbl}. Species identification: {bioclip} ({imageomics}). Phylogeny: {opentree}. Photos: {inaturalist}.",
+    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografias: {inaturalist}.",
+    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografías: {inaturalist}."
   },
 
   "nav.jump_to_order_aria": { "en": "Jump to order", "pt": "Ir para a ordem", "es": "Ir al orden" },
@@ -24,6 +29,7 @@
   "nav.map": { "en": "Map", "pt": "Mapa", "es": "Mapa" },
   "nav.atlas": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
   "nav.tree": { "en": "Tree", "pt": "Árvore", "es": "Árbol" },
+  "nav.rank": { "en": "Rank", "pt": "Ranking", "es": "Ranking" },
 
   "page.index_title": {
     "en": "Nidatlas — Birds of the Iberian Peninsula",
@@ -35,6 +41,11 @@
     "en": "Nidatlas — Tree of Life",
     "pt": "Nidatlas — Árvore da Vida",
     "es": "Nidatlas — Árbol de la Vida"
+  },
+  "page.rank_title": {
+    "en": "Nidatlas — Rank",
+    "pt": "Nidatlas — Ranking",
+    "es": "Nidatlas — Ranking"
   },
 
   "atlas.page_title": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
@@ -60,6 +71,7 @@
   "species.error_no_id": { "en": "No species specified.", "pt": "Nenhuma espécie especificada.", "es": "No se especificó ninguna especie." },
   "species.error_not_found": { "en": "Species not found.", "pt": "Espécie não encontrada.", "es": "Especie no encontrada." },
   "species.error_load": { "en": "Could not load species.", "pt": "Não foi possível carregar a espécie.", "es": "No se pudo cargar la especie." },
+  "species.photo_view_original": { "en": "View original ↗", "pt": "Ver original ↗", "es": "Ver original ↗" },
   "species.total_records_label": { "en": "Total records", "pt": "Total de registos", "es": "Total de registros" },
   "species.global_rank_label": { "en": "Global rank", "pt": "Classificação global", "es": "Clasificación global" },
   "species.global_rank_value": { "en": "{rank} of {total}", "pt": "{rank} de {total}", "es": "{rank} de {total}" },
@@ -114,8 +126,8 @@
     "pt": "Não foi possível carregar os dados de distribuição.",
     "es": "No se pudieron cargar los datos de distribución."
   },
-  "map.cell_count_one": { "en": "{count} cell", "pt": "{count} célula", "es": "{count} celda" },
-  "map.cell_count_other": { "en": "{count} cells", "pt": "{count} células", "es": "{count} celdas" },
+  "map.record_count_one": { "en": "{count} record", "pt": "{count} registo", "es": "{count} registro" },
+  "map.record_count_other": { "en": "{count} records", "pt": "{count} registos", "es": "{count} registros" },
   "map.popup_records_one": { "en": "{count} record", "pt": "{count} registo", "es": "{count} registro" },
   "map.popup_records_other": { "en": "{count} records", "pt": "{count} registos", "es": "{count} registros" },
   "map.popup_view_gbif": { "en": "View on GBIF →", "pt": "Ver no GBIF →", "es": "Ver en GBIF →" },
@@ -242,5 +254,26 @@
   "tree.zoom_in_aria": { "en": "Zoom in", "pt": "Aumentar zoom", "es": "Acercar zoom" },
   "tree.zoom_out_aria": { "en": "Zoom out", "pt": "Diminuir zoom", "es": "Alejar zoom" },
   "tree.zoom_reset": { "en": "Reset", "pt": "Repor", "es": "Restablecer" },
-  "tree.zoom_reset_aria": { "en": "Reset zoom to 100%", "pt": "Repor zoom a 100%", "es": "Restablecer zoom a 100%" }
+  "tree.zoom_reset_aria": { "en": "Reset zoom to 100%", "pt": "Repor zoom a 100%", "es": "Restablecer zoom a 100%" },
+
+  "rank.page_title": { "en": "Rank", "pt": "Ranking", "es": "Ranking" },
+  "rank.loading": { "en": "Loading ranking…", "pt": "A carregar ranking…", "es": "Cargando ranking…" },
+  "rank.error_load": {
+    "en": "Could not load the ranking.",
+    "pt": "Não foi possível carregar o ranking.",
+    "es": "No se pudo cargar el ranking."
+  },
+  "rank.explainer": {
+    "en": "Ranked by number of recorded GBIF observations across all of Iberia — this reflects how often a species has been recorded. For relative commonness by area, see the Map view.",
+    "pt": "Ordenado pelo número de registos de observação do GBIF em toda a Ibéria — isto reflete a frequência com que a espécie foi registada. Para a abundância relativa por zona, consulte o Mapa.",
+    "es": "Ordenado por el número de registros de observación de GBIF en toda Iberia — esto refleja la frecuencia con la que se ha registrado la especie. Para la abundancia relativa por zona, consulta el Mapa."
+  },
+  "rank.most_recorded_title": { "en": "Most recorded species", "pt": "Espécies mais registadas", "es": "Especies más registradas" },
+  "rank.least_recorded_title": { "en": "Least recorded species", "pt": "Espécies menos registadas", "es": "Especies menos registadas" },
+  "rank.record_count_one": { "en": "{count} record", "pt": "{count} registo", "es": "{count} registro" },
+  "rank.record_count_other": { "en": "{count} records", "pt": "{count} registos", "es": "{count} registros" },
+  "rank.rank_aria": { "en": "Rank {rank}", "pt": "Posição {rank}", "es": "Posición {rank}" },
+  "rank.view_full": { "en": "View full ranking (all 584 species) →", "pt": "Ver ranking completo (584 espécies) →", "es": "Ver ranking completo (584 especies) →" },
+  "rank.view_top_bottom": { "en": "← Back to top & bottom 50", "pt": "← Voltar ao top e fundo 50", "es": "← Volver al top y fondo 50" },
+  "rank.full_ranking_title": { "en": "Full ranking, most to least recorded", "pt": "Ranking completo, do mais ao menos registado", "es": "Ranking completo, de más a menos registrado" }
 }

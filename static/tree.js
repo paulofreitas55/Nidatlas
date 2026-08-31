@@ -40,6 +40,7 @@ async function init() {
   state.lang = initLangSwitch((lang) => {
     state.lang = lang;
     document.documentElement.lang = lang;
+    document.title = t("page.tree_title", lang);
     applyStaticTranslations(lang);
     renderFooter(lang);
     if (state.rootId != null) render();

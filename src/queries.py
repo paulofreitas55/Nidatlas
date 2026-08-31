@@ -35,6 +35,7 @@ def all_species(conn: sqlite3.Connection) -> list[dict]:
         """
         SELECT id, gbif_name, bioclip_name, family, "order", total_occurrences,
                common_name_pt, common_name_es, common_name_en,
+               image_url, image_source, image_license, image_attribution, image_source_url,
                ROW_NUMBER() OVER (ORDER BY "order", family, gbif_name) AS dex_number
         FROM species
         ORDER BY "order", family, gbif_name
@@ -51,10 +52,56 @@ def all_species(conn: sqlite3.Connection) -> list[dict]:
             "common_name_pt": common_name_pt,
             "common_name_es": common_name_es,
             "common_name_en": common_name_en,
+            "image_url": image_url,
+            "image_source": image_source,
+            "image_license": image_license,
+            "image_attribution": image_attribution,
+            "image_source_url": image_source_url,
             "dex_number": dex_number,
         }
         for sid, gbif_name, bioclip_name, family, order, total_occurrences,
-            common_name_pt, common_name_es, common_name_en, dex_number in rows
+            common_name_pt, common_name_es, common_name_en,
+            image_url, image_source, image_license, image_attribution, image_source_url, dex_number in rows
+    ]
+
+
+def species_ranking(conn: sqlite3.Connection) -> list[dict]:
+    # Same RANK() OVER (ORDER BY total_occurrences DESC) as species_profile's
+    # own global_rank -- so a species' position here always matches the "X of
+    # 584" figure shown on its own page. RANK() (not ROW_NUMBER()) matters
+    # specifically at the low end: several species are tied on a handful of
+    # occurrences, and giving them the same rank number is the honest
+    # representation -- a plain row-position count would imply a false
+    # distinction between species with identical totals. gbif_name as the
+    # secondary sort key only stabilises iteration order among ties (for
+    # reproducible responses/tests); it plays no part in the rank itself.
+    rows = conn.execute(
+        """
+        SELECT id, gbif_name, total_occurrences,
+               common_name_pt, common_name_es, common_name_en,
+               image_url, image_source, image_license, image_attribution, image_source_url,
+               RANK() OVER (ORDER BY total_occurrences DESC) AS rank
+        FROM species
+        ORDER BY total_occurrences DESC, gbif_name
+        """
+    ).fetchall()
+    return [
+        {
+            "id": sid,
+            "gbif_name": gbif_name,
+            "total_occurrences": total_occurrences,
+            "common_name_pt": common_name_pt,
+            "common_name_es": common_name_es,
+            "common_name_en": common_name_en,
+            "image_url": image_url,
+            "image_source": image_source,
+            "image_license": image_license,
+            "image_attribution": image_attribution,
+            "image_source_url": image_source_url,
+            "rank": rank,
+        }
+        for sid, gbif_name, total_occurrences, common_name_pt, common_name_es, common_name_en,
+            image_url, image_source, image_license, image_attribution, image_source_url, rank in rows
     ]
 
 
@@ -66,11 +113,13 @@ def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
         WITH numbered AS (
             SELECT id, gbif_name, bioclip_name, genus, family, "order", total_occurrences,
                    common_name_pt, common_name_es, common_name_en,
+                   image_url, image_source, image_license, image_attribution, image_source_url,
                    ROW_NUMBER() OVER (ORDER BY "order", family, gbif_name) AS dex_number
             FROM species
         )
         SELECT id, gbif_name, bioclip_name, genus, family, "order", total_occurrences,
-               common_name_pt, common_name_es, common_name_en, dex_number
+               common_name_pt, common_name_es, common_name_en,
+               image_url, image_source, image_license, image_attribution, image_source_url, dex_number
         FROM numbered WHERE id = ?
         """,
         (species_id,),
@@ -78,7 +127,8 @@ def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
     if row is None:
         raise ValueError(f"no species with id {species_id}")
     (sid, gbif_name, bioclip_name, genus, family, order, total_occurrences,
-        common_name_pt, common_name_es, common_name_en, dex_number) = row
+        common_name_pt, common_name_es, common_name_en,
+        image_url, image_source, image_license, image_attribution, image_source_url, dex_number) = row
 
     rank, percentile, total = conn.execute(
         """
@@ -135,6 +185,11 @@ def species_profile(conn: sqlite3.Connection, species_id: int) -> dict:
         "common_name_pt": common_name_pt,
         "common_name_es": common_name_es,
         "common_name_en": common_name_en,
+        "image_url": image_url,
+        "image_source": image_source,
+        "image_license": image_license,
+        "image_attribution": image_attribution,
+        "image_source_url": image_source_url,
         "dex_number": dex_number,
         "global_rank": {"rank": rank, "total": total, "percentile": round(percentile * 100, 1)},
         "monthly_profile": monthly_profile,
@@ -742,6 +797,10 @@ def _print_species_profile(profile: dict) -> None:
     print(f"Total occurrences: {profile['total_occurrences']:,}")
     rank = profile["global_rank"]
     print(f"Global rank: {rank['rank']} / 584 (percentile {rank['percentile']})")
+    if profile["image_url"]:
+        print(f"Photo: {profile['image_attribution']} [{profile['image_license']}] via {profile['image_source']}")
+    else:
+        print("Photo: none")
     print("Monthly profile (share of annual total):")
     for m in profile["monthly_profile"]:
         bar = "#" * round(m["share"] * 50)

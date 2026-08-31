@@ -108,6 +108,7 @@ function renderFooter(lang) {
       bioclip: `<a href="https://github.com/Imageomics/bioclip-2">BioCLIP 2</a>`,
       imageomics: "Imageomics Institute",
       opentree: `<a href="https://tree.opentreeoflife.org">Open Tree of Life</a>`,
+      inaturalist: `<a href="https://www.inaturalist.org">iNaturalist</a>`,
     });
   }
 }
@@ -129,4 +130,64 @@ function initLangSwitch(onChange) {
   });
 
   return lang;
+}
+
+// --- Species photo (shared: atlas cards, rank rows, species page) ---
+//
+// species.image_attribution is ONE canonical, ready-to-display credit
+// string regardless of source (iNaturalist or Wikidata/Commons -- see
+// CLAUDE.md's "Species photo cascade" design decision), always in English
+// (a factual photographer/licence credit, not translated prose -- see the
+// same design decision). Callers only decide how much room to give it: the
+// species page shows it in full, compact card/row contexts truncate it
+// with CSS ellipsis (buildPhotoCredit below) while still exposing the full
+// text via title/aria-label.
+
+// thumbClass: the caller's own sizing class (e.g. "card-thumb"); becomes an
+// <img> when a photo exists, otherwise the same blank placeholder <span>
+// used before photos existed, so a species with no coverage looks exactly
+// as it always has.
+function buildPhotoThumb(sp, thumbClass) {
+  const el = document.createElement(sp.image_url ? "img" : "span");
+  el.className = thumbClass;
+  if (sp.image_url) {
+    el.src = sp.image_url;
+    el.loading = "lazy";
+    el.alt = sp.gbif_name;
+    if (sp.image_attribution) el.title = sp.image_attribution;
+  }
+  return el;
+}
+
+// Pulls just the photographer's name out of the canonical
+// "Photo: {name}, some rights reserved (CC BY)" / "Photo: {name}, no
+// rights reserved (CC0)" string -- used only to build the compact form
+// below, never stored separately (the full string stays the one source of
+// truth; this is a display-only reduction of it).
+function photographerNameFrom(attribution) {
+  return attribution.replace(/^Photo: /, "").split(",")[0];
+}
+
+// options.compact: the atlas grid packs far more cards per screen than the
+// species page or rank list, so it gets a shorter "Photo: {name}, (CC BY)"
+// form instead of the full sentence -- still built from the SAME
+// image_attribution/image_license fields, not a different stored value,
+// and the full sentence is always still available via title/aria-label
+// regardless of which form is shown. Species pages and rank rows call this
+// with no options and keep the full sentence.
+//
+// Returns null when there's no photo, so callers can skip appending it entirely.
+function buildPhotoCredit(sp, lang, options = {}) {
+  if (!sp.image_attribution) return null;
+  const el = document.createElement("span");
+  el.className = "photo-credit";
+  if (options.compact) {
+    const licenseLabel = sp.image_license === "cc0" ? "CC0" : "CC BY";
+    el.textContent = `Photo: ${photographerNameFrom(sp.image_attribution)}, (${licenseLabel})`;
+  } else {
+    el.textContent = sp.image_attribution;
+  }
+  el.title = sp.image_attribution;
+  el.setAttribute("aria-label", t("common.photo_credit_aria", lang, { attribution: sp.image_attribution }));
+  return el;
 }

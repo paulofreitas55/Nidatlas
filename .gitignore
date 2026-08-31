@@ -15,3 +15,4 @@ data/*
 !data/taxonomy_synonyms.csv
 !data/ott_taxonomy_synonyms.csv
 !data/ott_ambiguous_resolutions.csv
+!data/image_source_synonyms.csv

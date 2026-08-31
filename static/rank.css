@@ -1,0 +1,136 @@
+/* rank.html only -- reuses .page-title/.status/.card-thumb/.card-name/
+   .card-common from style.css for visual consistency with the atlas cards
+   and other pages. */
+
+.rank-explainer {
+  max-width: 60ch;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 1rem;
+}
+
+/* [hidden] is only display:none in the browser's UA stylesheet, which an
+   author rule as specific as this one otherwise overrides outright -- the
+   explicit [hidden] override below is what actually lets rank.js's
+   showingFull toggle (which just sets .hidden on these two containers) hide
+   this one when the full single-list view is showing. */
+.rank-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+.rank-columns[hidden] {
+  display: none;
+}
+
+.rank-column h3,
+.rank-full h3 {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rank-row-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+.rank-row-link:hover,
+.rank-row-link:focus-visible {
+  border-color: var(--accent);
+}
+
+.rank-row-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rank-number {
+  flex: 0 0 auto;
+  min-width: 2.6rem;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.rank-thumb {
+  width: 42px;
+  flex: 0 0 auto;
+}
+
+.rank-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.rank-info .card-name,
+.rank-info .card-common {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-count {
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rank-toggle-btn {
+  display: block;
+  margin: 1.5rem auto 0;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--green);
+  background: var(--paper-box);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+}
+
+.rank-toggle-btn:hover,
+.rank-toggle-btn:focus-visible {
+  border-color: var(--green);
+}
+
+.rank-full {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.rank-full .search-box {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .rank-columns {
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+}

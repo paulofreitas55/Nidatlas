@@ -77,6 +77,11 @@ def api_all_species(conn: sqlite3.Connection = Depends(get_db)) -> list[dict]:
     return queries.all_species(conn)
 
 
+@app.get("/api/species/ranking")
+def api_species_ranking(conn: sqlite3.Connection = Depends(get_db)) -> list[dict]:
+    return queries.species_ranking(conn)
+
+
 @app.get("/api/species/{species_id}")
 def api_species_profile(
     species_id: int,
@@ -214,6 +219,11 @@ def serve_atlas() -> FileResponse:
 @app.get("/tree", include_in_schema=False)
 def serve_tree() -> FileResponse:
     return FileResponse("static/tree.html")
+
+
+@app.get("/rank", include_in_schema=False)
+def serve_rank() -> FileResponse:
+    return FileResponse("static/rank.html")
 
 
 # Mounted last and at "/" so it only catches paths no route above already

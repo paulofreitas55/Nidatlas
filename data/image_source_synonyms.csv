@@ -1,0 +1,7 @@
+gbif_name,inaturalist_name,wikidata_name,note
+Charadrius alexandrinus,Anarhynchus alexandrinus,,iNaturalist follows the 2023 Charadriidae revision moving most Charadrius plovers into Anarhynchus; GBIF's backbone hadn't adopted it at fetch time. Wikidata already resolves the GBIF name directly (image existed, just not under an allowed licence), so no override needed there.
+Charadrius dubius,Thinornis dubius,,Same Anarhynchus-era plover revision as above, placed in Thinornis specifically for this species. Verified directly against /v1/taxa/autocomplete.
+Charadrius morinellus,Eudromias morinellus,,Long-standing alternate genus placement iNaturalist uses. Wikidata already resolves the GBIF name directly (image existed, just not under an allowed licence).
+Erythropygia galactotes,Cercotrichas galactotes,Cercotrichas galactotes,Alternate genus placement; confirmed both iNaturalist and Wikidata (P225) resolve under Cercotrichas, not Erythropygia.
+Phylloscopus sibillatrix,Phylloscopus sibilatrix,,Spelling only -- GBIF's name has a double L; the correct/current spelling (and the one iNaturalist uses) has a single L.
+Anas carolinensis,Anas crecca carolinensis,,iNaturalist's active taxonomy treats this as a subspecies of Anas crecca, not a species of its own (GBIF and Wikidata both treat it as a full species, Anas carolinensis, Green-winged Teal). Requires the species+subspecies rank widening in fetch_species_images.py's inat_search_taxon.
