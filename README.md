@@ -8,12 +8,11 @@ on public GBIF occurrence data.
 
 ## What it does
 
-- **Region map** (the landing page) — every district, province and named
-  island shaded by total bird occurrences, with a side panel showing which
-  species are most and least characteristic of the region you click, and a
-  month filter.
-- **Species atlas** — all ~584 Iberian bird species as a browsable,
-  searchable card grid grouped by taxonomic order and family.
+- **Species atlas** (the landing page) — all ~584 Iberian bird species as a
+  browsable, searchable card grid grouped by taxonomic order and family.
+- **Region map** — every district, province and named island shaded by
+  total bird occurrences, with a side panel showing which species are most
+  and least characteristic of the region you click, and a month filter.
 - **Species pages** — a photo (see Photo credits below), a seasonality
   chart, a distribution map (down to a 10km grid cell) for any individual
   species, including archipelago-aware views for island endemics, and its

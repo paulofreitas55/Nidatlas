@@ -41,7 +41,7 @@ prints a few real queries to the console.
 handler is a few lines: call the matching query function, translate
 `ValueError` (not-found) into a 404. Also serves the static frontend
 directly (`StaticFiles` mounted at `/`, with explicit routes for `/`,
-`/atlas`, `/tree`, `/rank` and (when enabled) `/identify`, since a
+`/map`, `/tree`, `/rank` and (when enabled) `/identify`, since a
 same-directory HTML file under a different name needs an explicit route —
 `StaticFiles(html=True)` only auto-serves `index.html`). Runs a `no-store`
 `Cache-Control` middleware on every response — this is a local/dev-oriented
@@ -50,11 +50,10 @@ deployment where you'd want real caching back. `GET /api/config` reports
 `{"identify_enabled": bool}` so the static frontend can decide at runtime
 whether to show the IDENTIFY nav link/page (see below). `POST /api/identify`
 (only registered when `ENABLE_IDENTIFY` is set — see "IDENTIFY feature
-isolation" in Design decisions) accepts a multipart image upload
-(+ optional `lat`/`lon`, accepted but not yet used to affect the result),
-enforces a max file size and an allowed-MIME-type list, rate-limits by
-client IP (a simple in-process sliding-window counter — no new dependency;
-see the comment above it in `api.py`), and delegates to `src/identification.py`.
+isolation" in Design decisions) accepts a multipart image upload, enforces
+a max file size and an allowed-MIME-type list, rate-limits by client IP (a
+simple in-process sliding-window counter — no new dependency; see the
+comment above it in `api.py`), and delegates to `src/identification.py`.
 
 **Identification** (`src/identification.py`): the web-facing counterpart to
 `scripts/identify.py`'s CLI, both restricted to Iberia's 584 species (see
@@ -70,11 +69,11 @@ with `ENABLE_IDENTIFY` end to end.
 
 **Frontend** (`static/`, no build step, no framework, no bundler — plain
 `<script>` tags): six pages sharing common CSS/JS.
-- `map.html` + `map.css` + `map.js` — the landing page (served at `/`). The
-  97-region choropleth, shaded by total occurrences, with an archipelago
-  panel selector and a side panel showing per-region species rankings.
-- `atlas.html` + `app.js` — served at `/atlas`. The full 584-species card
-  grid, grouped by order/family, with search.
+- `atlas.html` + `app.js` — the landing page (served at `/`). The full
+  584-species card grid, grouped by order/family, with search.
+- `map.html` + `map.css` + `map.js` — served at `/map`. The 97-region
+  choropleth, shaded by total occurrences, with an archipelago panel
+  selector and a side panel showing per-region species rankings.
 - `species.html` + `species.js` + `species.css` — one species' profile:
   identity, seasonality chart (pure SVG), its own distribution map, and a
   "Position in the tree of life" section (see `phylogeny` below).
@@ -108,9 +107,13 @@ with `ENABLE_IDENTIFY` end to end.
   Upload a photo or take one with the device camera (two plain
   `<input type=file>` elements, one with `capture="environment"` as a
   camera hint — no `getUserMedia`/live video preview, kept deliberately
-  simple), optionally attach the browser's geolocation (opt-in via a
-  button, never automatic), and POST to `/api/identify`. Mobile-first CSS
-  (this is the view most likely used outdoors, camera in hand). Renders
+  simple) and POST it to `/api/identify` — no location or other personal
+  data is collected. An earlier draft accepted an optional browser
+  geolocation, opt-in via a button, but the server discarded it unread
+  (`identification.classify_image_bytes()` never took a location argument)
+  — a real privacy exposure for zero benefit, so it was removed rather than
+  wired up or kept dormant. Mobile-first CSS (this is the view most likely
+  used outdoors, camera in hand). Renders
   results one of two ways depending on the response's `confident` flag,
   never both: a real candidate list (thumbnail via the shared
   `buildPhotoThumb`/`buildPhotoCredit` from `lang.js`, a confidence bar,
@@ -809,10 +812,10 @@ called by anything else in the repo.
 **Done:** the full data pipeline (species list → cube → SQLite →
 vernacular names → administrative regions → phylogeny → species photos),
 the query layer and FastAPI backend with a 50-test pytest suite, and all
-six frontend pages (region map landing page, species atlas grid, species
+six frontend pages (species atlas grid landing page, region map, species
 detail page, tree of life view, occurrence-count ranking, photo
 identification) fully implemented and localized in pt/es/en with shared
-top-level MAP/ATLAS/TREE/RANK/IDENTIFY navigation. Every species now has a
+top-level ATLAS/MAP/TREE/RANK/IDENTIFY navigation, in that order. Every species now has a
 real, commercially-usable, attributed photo (584/584 — see the "Species
 photo cascade" design decision) shown on its atlas card, its own page and
 the rank lists; a manual review afterward found 40 species with an
@@ -885,8 +888,8 @@ Once `data/nidatlas.db` exists:
 python src/api.py
 ```
 
-Serves on `http://127.0.0.1:8000/` (the region map). `/atlas` is the
-species list. Static files are served with `Cache-Control: no-store`, so a
+Serves on `http://127.0.0.1:8000/` (the species atlas). `/map` is the
+region map. Static files are served with `Cache-Control: no-store`, so a
 plain reload always reflects the latest files on disk — no need to hard-refresh
 during development.
 

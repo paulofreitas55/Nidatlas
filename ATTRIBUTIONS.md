@@ -28,6 +28,7 @@ Authoritative record of every external dataset, model and library Nidatlas depen
 | shapely | PyPI `shapely`, v2.1.2 (build-time only, used by `scripts/build_land_polygons.py`, `clip_land_to_countries.py`, `build_border_lines.py`, `build_regions.py` and `assign_regions.py`) | BSD-3-Clause | Yes | No | requirements.txt |
 | httpx | PyPI `httpx`, v0.28.1 | BSD-3-Clause | Yes | No | requirements.txt |
 | pytest | PyPI `pytest`, v9.1.1 (dev/test only, not a runtime dependency) | MIT | Yes | No | requirements.txt |
+| python-multipart | PyPI `python-multipart`, v0.0.32 (parses the multipart form body `POST /api/identify` receives; only exercised when `ENABLE_IDENTIFY` is on) | Apache-2.0 | Yes | No | requirements.txt |
 
 ## Unverified — flagged for follow-up
 

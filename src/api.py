@@ -9,7 +9,7 @@ from collections.abc import Generator
 
 import queries
 import uvicorn
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
@@ -121,15 +121,8 @@ if ENABLE_IDENTIFY:
     async def api_identify(
         request: Request,
         file: UploadFile = File(...),
-        lat: float | None = Form(None),
-        lon: float | None = Form(None),
         conn: sqlite3.Connection = Depends(get_db),
     ) -> dict:
-        # lat/lon accepted (for a future geographic-plausibility check) but not
-        # yet used to affect the result -- see CLAUDE.md; don't build that
-        # logic speculatively before it's actually needed.
-        del lat, lon
-
         client_key = request.client.host if request.client else "unknown"
         _enforce_identify_rate_limit(client_key)
 
@@ -306,22 +299,22 @@ def api_region_cells(
         raise HTTPException(status_code=404, detail=f"no region with id {region_id}")
 
 
-# The region map is the site's landing page and the species atlas/tree
-# views live at /atlas and /tree -- all three are plain static files
-# (static/map.html, static/atlas.html, static/tree.html), but
-# StaticFiles(html=True) below only auto-serves index.html for "/", not a
-# same-directory file under a different name. These explicit routes are
-# declared ahead of the Mount for that reason; every other static asset
-# (map.js, atlas.html hit directly, species.html, *.geojson, ...) still
-# resolves through the Mount by its own filename exactly as before.
+# The species atlas is the site's landing page and the region map view
+# lives at /map -- both are plain static files (static/atlas.html,
+# static/map.html), but StaticFiles(html=True) below only auto-serves
+# index.html for "/", not a same-directory file under a different name.
+# These explicit routes are declared ahead of the Mount for that reason;
+# every other static asset (map.js, atlas.html hit directly, species.html,
+# *.geojson, ...) still resolves through the Mount by its own filename
+# exactly as before.
 @app.get("/", include_in_schema=False)
-def serve_map() -> FileResponse:
-    return FileResponse("static/map.html")
-
-
-@app.get("/atlas", include_in_schema=False)
 def serve_atlas() -> FileResponse:
     return FileResponse("static/atlas.html")
+
+
+@app.get("/map", include_in_schema=False)
+def serve_map() -> FileResponse:
+    return FileResponse("static/map.html")
 
 
 @app.get("/tree", include_in_schema=False)

@@ -74,36 +74,6 @@
   border-radius: 8px;
 }
 
-.identify-location-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-}
-
-.identify-location-btn {
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--green);
-  background: var(--paper-box);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.4rem 0.9rem;
-  cursor: pointer;
-}
-
-.identify-location-btn:hover,
-.identify-location-btn:focus-visible {
-  border-color: var(--green);
-}
-
-.identify-location-status {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
 .identify-submit-btn {
   display: block;
   width: 100%;

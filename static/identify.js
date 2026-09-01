@@ -14,8 +14,6 @@ const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const state = {
   lang: "en",
   file: null,
-  lat: null,
-  lon: null,
 };
 
 async function init() {
@@ -42,7 +40,6 @@ async function init() {
 
   document.getElementById("identify-camera-input").addEventListener("change", onFileInputChange);
   document.getElementById("identify-file-input").addEventListener("change", onFileInputChange);
-  document.getElementById("identify-location-btn").addEventListener("click", onUseLocationClick);
   document.getElementById("identify-submit-btn").addEventListener("click", onSubmitClick);
 }
 
@@ -72,26 +69,6 @@ function onFileInputChange(event) {
   document.getElementById("identify-preview-wrap").hidden = false;
 }
 
-function onUseLocationClick() {
-  const statusEl = document.getElementById("identify-location-status");
-  if (!navigator.geolocation) {
-    statusEl.textContent = t("identify.location_unavailable", state.lang);
-    return;
-  }
-  statusEl.textContent = t("identify.location_locating", state.lang);
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      state.lat = position.coords.latitude;
-      state.lon = position.coords.longitude;
-      statusEl.textContent = t("identify.location_acquired", state.lang);
-    },
-    () => {
-      statusEl.textContent = t("identify.location_denied", state.lang);
-    },
-    { timeout: 10000 }
-  );
-}
-
 async function onSubmitClick() {
   if (!state.file) return;
 
@@ -103,8 +80,6 @@ async function onSubmitClick() {
 
   const formData = new FormData();
   formData.append("file", state.file);
-  if (state.lat != null) formData.append("lat", String(state.lat));
-  if (state.lon != null) formData.append("lon", String(state.lon));
 
   try {
     const response = await fetch("/api/identify", { method: "POST", body: formData });
