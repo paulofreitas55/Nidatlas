@@ -1,0 +1,27 @@
+# Everything in data/ except the one file the image actually needs -- see
+# CLAUDE.md's Deployment section (decision: bake data/nidatlas.db and the
+# generated static/*.geojson files at build time, nothing else from data/).
+# This one blanket exclude covers the raw GBIF CSVs, cube_clean.parquet, every
+# *_raw.json API-response cache, the curated taxonomy/override CSVs, and the
+# sample .jpg files used for confidence-threshold measurement -- none of
+# which the running server reads.
+data/*
+!data/nidatlas.db
+
+.venv/
+.git/
+.github/
+
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+tests/
+
+docs/
+*.md
+
+.claude/
+.dockerignore
+Dockerfile

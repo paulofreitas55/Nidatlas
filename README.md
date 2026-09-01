@@ -26,7 +26,10 @@ on public GBIF occurrence data.
   guesses among Iberia's 584 species, each linked to its species page, with
   a confidence score and an explicit "not confident" state rather than a
   false-certain answer. An optional feature (see below) — off by default so
-  a deployment isn't forced to carry the ~1.7GB of model weights.
+  a deployment isn't forced to carry the ~1.7GB of model weights. A photo is
+  used only to run identification, never stored or shared, and discarded
+  once a result is returned — see the Privacy page (`/privacy`, linked from
+  every page's footer) for the full statement.
 - Fully localised in **Portuguese, Spanish and English**.
 
 Species identification also ships as a standalone CLI (`scripts/identify.py`),
@@ -41,7 +44,7 @@ The IDENTIFY view is off by default — the app runs as a lightweight
 container without it. To turn it on:
 
 ```powershell
-pip install pybioclip   # already in requirements.txt
+pip install -r requirements-identify.txt   # pybioclip/PyTorch -- not in requirements.txt itself
 $env:ENABLE_IDENTIFY = "1"
 python src/api.py
 ```
@@ -88,10 +91,22 @@ exists:
 python src/api.py
 ```
 
-Serves at `http://127.0.0.1:8000/`. Run the tests with:
+Serves at `http://0.0.0.0:8000/` by default (override with the `HOST`/`PORT`
+env vars, e.g. `HOST=127.0.0.1` for a strictly local-only bind). Run the
+tests with:
 
 ```powershell
 python -m pytest tests/ -q
+```
+
+Alternatively, build and run the Docker image (requires `data/nidatlas.db`
+and the generated `static/*.geojson` files to already exist locally — they
+get baked into the image at build time, see
+[CLAUDE.md](CLAUDE.md#deployment)):
+
+```powershell
+docker build -t nidatlas .
+docker run -p 8000:8000 nidatlas
 ```
 
 ## Data sources
@@ -159,5 +174,6 @@ coastline the map actually draws). See [CLAUDE.md](CLAUDE.md) for why.
   - `Tyto alba`
 
   The seventh, `Emberiza rustica`, is more severe: its exact taxon match is flagged `"hidden"` in Open Tree's own taxonomy, so `induced_subtree` refuses the id outright rather than folding it into a placeholder. `src/queries.py`'s phylogeny functions treat all 7 as a valid "no tree placement" outcome (empty relatives list, not a 404), never a guessed-at position. See `scripts/fetch_phylogeny.py`'s own report for the up-to-date list if the resolution is ever rerun.
-- **No caching in production terms.** The API currently sends `Cache-Control: no-store` on every response, a deliberate dev-convenience choice (see `src/api.py`) that should be revisited before any real deployment.
-- **Not yet deployed anywhere.** Everything above runs locally only — there is no Docker image, CI pipeline, or hosting target configured yet.
+- **No cloud hosting target yet.** The app is containerized (`Dockerfile`, see [CLAUDE.md](CLAUDE.md)'s Deployment section) and has a real `Cache-Control` policy, but nothing pushes that image anywhere — no CI pipeline or actual Azure (or other) hosting target is configured yet.
+- **Data updates require a rebuild.** `data/nidatlas.db` and the generated `static/*.geojson` files are baked into the Docker image at build time, not fetched at runtime — updating the data means rebuilding and redeploying the image, not editing a live volume. See CLAUDE.md's Deployment section.
+- **Rate limiting is single-process only, for now.** Both `/api/identify`'s and the general `/api/*` rate limiter keep their counters in memory, scoped to one running process — correct for the current single-worker deployment, but would need moving to a shared store or a reverse-proxy/CDN layer before running multiple workers or replicas. See CLAUDE.md's rate-limiting design decisions.

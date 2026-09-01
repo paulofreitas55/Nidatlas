@@ -1,0 +1,10 @@
+# Optional extra: only needed for the IDENTIFY feature (POST /api/identify,
+# scripts/identify.py, scripts/build_species_list.py). Installs pybioclip and,
+# transitively, PyTorch (~1.7GB of weights get downloaded separately at first
+# model load, not by this install). Kept out of requirements.txt so a default
+# install/deploy doesn't pull either -- see CLAUDE.md's "IDENTIFY feature
+# isolation" design decision.
+#
+#   pip install -r requirements.txt -r requirements-identify.txt
+#
+pybioclip

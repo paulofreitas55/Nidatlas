@@ -9,11 +9,12 @@ from collections.abc import Generator
 
 import queries
 import uvicorn
-from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 # Whole IDENTIFY feature (route registration below, /identify static page,
 # nav button) is off unless this is explicitly set -- see CLAUDE.md's
@@ -24,7 +25,56 @@ from fastapi.staticfiles import StaticFiles
 # not installed is safe as long as the flag stays unset.
 ENABLE_IDENTIFY = os.environ.get("ENABLE_IDENTIFY", "").strip().lower() in ("1", "true", "yes")
 
+# Was hardcoded to 127.0.0.1:8000, which only accepts connections from
+# inside the same network namespace -- fine for local dev, but unreachable
+# from outside a Docker container even with the port published. 0.0.0.0
+# binds every interface, which is what a container needs; HOST/PORT stay
+# overridable for whatever a given deployment target expects (e.g. a
+# platform that assigns its own PORT).
+HOST = os.environ.get("HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", "8000"))
+
+# Off by default: X-Forwarded-For is client-suppliable, so trusting it
+# blindly would let anyone dodge rate limiting by just claiming a different
+# IP. Only turn this on when actually deployed behind a reverse proxy (e.g.
+# Azure Container Apps' own ingress) that ITSELF sets/overwrites this header
+# on every request rather than passing through whatever a client already
+# sent -- see _client_ip below and CLAUDE.md's rate-limiting design decision.
+TRUST_PROXY_HEADERS = os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in ("1", "true", "yes")
+
 app = FastAPI(title="Nidatlas API")
+
+# Global safety net, applies to every route: no request body over this size
+# is ever fully received, in memory or otherwise -- Starlette enforces it
+# DURING the read itself (tracking a running total across the ASGI receive
+# stream, not just trusting a client-declared Content-Length, which a client
+# could omit or lie about), before any route or other middleware gets a
+# chance to buffer it. Set just above /api/identify's own 8MB image cap --
+# the only endpoint that accepts a body at all today -- so that cap (checked
+# inside the route itself) is always what actually rejects an oversized
+# image with IDENTIFY's own error message; this one exists purely as a hard
+# ceiling so nothing in this app can ever be made to buffer an unbounded
+# payload. See CLAUDE.md's upload/disk-spooling design decision for the
+# measurement that motivated this.
+#
+# MUST be added FIRST (before GZip and the @app.middleware("http") functions
+# below): add_middleware() inserts each new middleware at the OUTERMOST
+# position, so registering this one first makes it the INNERMOST instead --
+# directly wrapping the router with no BaseHTTPMiddleware layer in between.
+# That ordering isn't cosmetic: this middleware raises its 413 by making the
+# wrapped ASGI `receive` callable itself throw once the running total is
+# exceeded, and a BaseHTTPMiddleware layer (which is what every
+# @app.middleware("http") function below compiles to) sitting between it and
+# the route runs call_next() inside its own anyio task group -- an exception
+# raised from deep inside that nested receive() call gets wrapped into an
+# ExceptionGroup that this middleware's own try/except no longer recognises,
+# so the request crashes with an unhandled 500 instead of a clean 413.
+# Confirmed by reproducing exactly that failure with this middleware added
+# last, before moving it here -- see tests/test_identify.py's global-cap
+# test, which exercises this directly.
+_MAX_REQUEST_BODY_BYTES = 9 * 1024 * 1024
+app.add_middleware(RequestBodyLimitMiddleware, max_body_size=_MAX_REQUEST_BODY_BYTES)
+
 # static/iberia.geojson and the cell-list endpoints are JSON/geometry --
 # exactly the content type gzip compresses best (typically 80-90% smaller
 # in transfer size), so this cuts real load time on top of the vertex-count
@@ -32,21 +82,145 @@ app = FastAPI(title="Nidatlas API")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+_CACHE_LONG = "public, max-age=86400"  # static assets/images: 1 day
+_CACHE_SHORT = "public, max-age=60"  # read-only /api/* GETs: 1 minute
+_CACHE_NONE = "no-store"
+
+# Endpoints that must never be cached regardless of the /api/ prefix rule
+# below: /api/health and /api/config are cheap to recompute but wrong to
+# serve stale (a cached "identify_enabled": false would hide the IDENTIFY nav
+# link even after an operator turns the feature on); /api/identify is a POST
+# with per-request rate-limiting and file-upload side effects, not a
+# cacheable resource at all.
+_CACHE_NONE_PATHS = {"/api/health", "/api/config", "/api/identify"}
+
+
 @app.middleware("http")
-async def no_cache_headers(request, call_next):
-    # StaticFiles otherwise lets browsers cache map.js/common.js/*.geojson/etc
-    # indefinitely between visits (Starlette sets Last-Modified/ETag but no
-    # Cache-Control, and browsers apply their own heuristic freshness window
-    # on top of that) -- during active development, where these files change
-    # every few minutes, that heuristic window is exactly wrong: a user can
-    # reload the page and still get yesterday's JS with no visible sign
-    # anything is stale. no-store forces every request to hit the server
-    # fresh, trading away caching entirely in exchange for "what's on disk is
-    # always what's served" -- the right tradeoff for a small local app, not
-    # necessarily for a public production deployment under real load.
+async def cache_control_headers(request, call_next):
+    # Static assets (the six HTML pages, JS/CSS, the GeoJSON basemap/region
+    # files) only change when the image is rebuilt and redeployed -- see
+    # CLAUDE.md's Deployment section: data/nidatlas.db and the generated
+    # static/*.geojson files are baked into the image at build time, there is
+    # no live edit-and-reload story in a deployed container the way there was
+    # for local dev. A day-long max-age is "long" without being "forever":
+    # these files aren't served under a content-hashed filename (no build
+    # step generates one), so a multi-day or immutable cache would risk
+    # browsers holding onto stale JS/CSS across a redeploy that changes
+    # behaviour, for as long as that max-age lasts.
+    #
+    # /api/* responses reflect data/nidatlas.db, which is likewise fixed for
+    # the life of a deployed container -- a short cache (1 minute) trades a
+    # small, bounded staleness window for real load reduction on popular
+    # endpoints (species list, rankings, region summaries) without the
+    # complexity of per-route invalidation. The three paths in
+    # _CACHE_NONE_PATHS above are carved out because caching them at all
+    # would be actively wrong, not just imprecise.
     response = await call_next(request)
-    response.headers["Cache-Control"] = "no-store"
+    path = request.url.path
+    if path in _CACHE_NONE_PATHS:
+        response.headers["Cache-Control"] = _CACHE_NONE
+    elif path.startswith("/api/"):
+        response.headers["Cache-Control"] = _CACHE_SHORT
+    else:
+        response.headers["Cache-Control"] = _CACHE_LONG
     return response
+
+
+# External hosts this app actually loads something from -- kept in sync with
+# ATTRIBUTIONS.md: unpkg.com serves Leaflet's JS/CSS (species.html/map.html),
+# iNaturalist's S3 bucket and Wikimedia Commons serve hotlinked species
+# photos (never downloaded/re-hosted -- see CLAUDE.md's "Species photos are
+# hotlinked" design decision), blob: is the identify page's own
+# URL.createObjectURL() preview of a locally-selected file before upload.
+# Nothing else is allowed -- if a future change adds another external
+# resource (a new CDN, a different photo host), it needs a matching addition
+# here or the browser will silently block it.
+_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' https://unpkg.com; "
+    "style-src 'self' https://unpkg.com; "
+    "img-src 'self' data: blob: https://inaturalist-open-data.s3.amazonaws.com https://upload.wikimedia.org https://unpkg.com; "
+    "connect-src 'self'; "
+    "font-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    # nosniff: stops a browser from guessing a response's type from its
+    # content instead of trusting Content-Type -- relevant here since
+    # /api/identify accepts a user-supplied image and StaticFiles serves
+    # whatever's on disk. strict-origin-when-cross-origin: this site links
+    # out to GBIF/iNaturalist/OpenStreetMap/etc. in footers and species
+    # pages -- full URL on same-origin navigation, origin only cross-origin,
+    # nothing on a downgrade to plain HTTP.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = _CONTENT_SECURITY_POLICY
+    return response
+
+
+def _client_ip(request: Request) -> str:
+    # See TRUST_PROXY_HEADERS above: only reads X-Forwarded-For when this
+    # deployment has explicitly said a trusted proxy is in front of it and
+    # owns that header. X-Forwarded-For is a comma-separated hop chain (each
+    # proxy appends its own view) -- the FIRST entry is the original client
+    # as seen by the nearest trusted proxy, which is only meaningful under
+    # the precondition above (a trusted proxy that sets/overwrites this
+    # header itself, never blindly forwarding a client-supplied one).
+    if TRUST_PROXY_HEADERS:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+class _SlidingWindowRateLimiter:
+    # In-process, single-worker-only -- see CLAUDE.md's rate-limiter design
+    # decision (this is a KNOWN limitation, not fixed here: each process
+    # gets its own independent counters, so the effective limit multiplies
+    # by worker/replica count under any multi-process deployment). Shared by
+    # the general /api/* limiter and (when enabled) IDENTIFY's own stricter
+    # one below, rather than duplicating this logic twice.
+    def __init__(self, max_requests: int, window_seconds: float) -> None:
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._request_times: dict[str, list[float]] = defaultdict(list)
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        recent = [t for t in self._request_times[key] if t >= cutoff]
+        allowed = len(recent) < self.max_requests
+        if allowed:
+            recent.append(now)
+        self._request_times[key] = recent
+        return allowed
+
+
+# General /api/* rate limit: deliberately generous (100/min, vs IDENTIFY's
+# 10/min below) since these are cheap read-only SQLite queries against a
+# small local database, not model inference -- the goal is blocking a script
+# hammering the API, not throttling normal browsing. See CLAUDE.md: this
+# should move to a reverse-proxy/CDN layer once one exists in front of this
+# app, rather than growing more elaborate in-process.
+_GENERAL_API_RATE_LIMIT_MAX_REQUESTS = 100
+_GENERAL_API_RATE_LIMIT_WINDOW_SECONDS = 60
+_general_api_limiter = _SlidingWindowRateLimiter(
+    _GENERAL_API_RATE_LIMIT_MAX_REQUESTS, _GENERAL_API_RATE_LIMIT_WINDOW_SECONDS
+)
+
+
+@app.middleware("http")
+async def enforce_general_api_rate_limit(request: Request, call_next):
+    if request.url.path.startswith("/api/"):
+        if not _general_api_limiter.allow(_client_ip(request)):
+            return JSONResponse({"detail": "too many API requests -- try again shortly"}, status_code=429)
+    return await call_next(request)
 
 
 def get_db() -> Generator[sqlite3.Connection, None, None]:
@@ -86,53 +260,56 @@ def api_config() -> dict:
     return {"identify_enabled": ENABLE_IDENTIFY}
 
 
-# --- /api/identify rate limiting ---
-#
-# In-process sliding-window counter, not a new dependency (no slowapi/redis):
-# this endpoint is the one place in the app that runs real model inference,
-# so it's the one place worth protecting from being hammered, but the rest
-# of this project's architecture (single local/dev-oriented process, no
-# shared cache -- see the no-store Cache-Control middleware above) doesn't
-# justify pulling in an external rate-limiting stack for it. Same tradeoff,
-# revisit together whenever a real multi-process deployment happens (see
-# CLAUDE.md's Current state / Next section).
-_IDENTIFY_RATE_LIMIT_MAX_REQUESTS = 10
-_IDENTIFY_RATE_LIMIT_WINDOW_SECONDS = 60
-_identify_request_times: dict[str, list[float]] = defaultdict(list)
-
-
-def _enforce_identify_rate_limit(client_key: str) -> None:
-    now = time.monotonic()
-    cutoff = now - _IDENTIFY_RATE_LIMIT_WINDOW_SECONDS
-    recent = [t for t in _identify_request_times[client_key] if t >= cutoff]
-    if len(recent) >= _IDENTIFY_RATE_LIMIT_MAX_REQUESTS:
-        raise HTTPException(status_code=429, detail="too many identification requests -- try again shortly")
-    recent.append(now)
-    _identify_request_times[client_key] = recent
-
-
 if ENABLE_IDENTIFY:
     import identification
 
     _IDENTIFY_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024  # 8MB -- generous for a phone photo, small for a DoS upload
     _IDENTIFY_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
+    # Stricter than the general /api/* limiter above: this is the one place
+    # in the app that runs real model inference, so it's the one place worth
+    # protecting from being hammered specifically (not a new dependency --
+    # reuses _SlidingWindowRateLimiter, same in-process/single-worker caveat
+    # noted there).
+    _IDENTIFY_RATE_LIMIT_MAX_REQUESTS = 10
+    _IDENTIFY_RATE_LIMIT_WINDOW_SECONDS = 60
+    _identify_limiter = _SlidingWindowRateLimiter(
+        _IDENTIFY_RATE_LIMIT_MAX_REQUESTS, _IDENTIFY_RATE_LIMIT_WINDOW_SECONDS
+    )
+
     @app.post("/api/identify")
     async def api_identify(
         request: Request,
-        file: UploadFile = File(...),
         conn: sqlite3.Connection = Depends(get_db),
     ) -> dict:
-        client_key = request.client.host if request.client else "unknown"
-        _enforce_identify_rate_limit(client_key)
+        client_key = _client_ip(request)
+        if not _identify_limiter.allow(client_key):
+            raise HTTPException(status_code=429, detail="too many identification requests -- try again shortly")
 
-        if file.content_type not in _IDENTIFY_ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=415, detail=f"unsupported file type: {file.content_type!r}")
+        content_type = request.headers.get("content-type", "")
+        if content_type not in _IDENTIFY_ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=415, detail=f"unsupported file type: {content_type!r}")
 
-        # Read with a +1-byte cap so an oversized upload is rejected without
-        # ever buffering more than one byte past the limit, and the image is
-        # never written to disk at any point (see identification.py).
-        body = await file.read(_IDENTIFY_MAX_FILE_SIZE_BYTES + 1)
+        # Read the raw request body directly -- deliberately NOT via
+        # FastAPI's UploadFile/File(...), which parses multipart/form-data
+        # through Starlette's MultiPartParser. That parser spools any file
+        # part over 1MB (SpooledTemporaryFile's spool_max_size, a hardcoded
+        # 1MB default) to a REAL temporary file on disk -- confirmed by
+        # directly reproducing that exact mechanism, not assumed -- which
+        # broke this feature's own "never written to disk" promise for any
+        # upload over 1MB (an ordinary phone photo, well under the 8MB cap
+        # here). The frontend now POSTs the raw file bytes with its own
+        # Content-Type instead of multipart/form-data (see identify.js) so
+        # this endpoint never touches that code path at all.
+        #
+        # request.body() is a pure in-memory ASGI read (concatenates
+        # receive() chunks into a bytes object -- no tempfile involved,
+        # verified the same way), and the app-wide RequestBodyLimitMiddleware
+        # registered above already bounds any request body to
+        # _MAX_REQUEST_BODY_BYTES DURING this read, so this also can't be
+        # abused to buffer an unbounded payload before the size check below
+        # even runs. See CLAUDE.md's upload/disk-spooling design decision.
+        body = await request.body()
         if len(body) > _IDENTIFY_MAX_FILE_SIZE_BYTES:
             raise HTTPException(status_code=413, detail="image too large")
 
@@ -167,7 +344,7 @@ if ENABLE_IDENTIFY:
 
 @app.get("/api/species")
 def api_search_species(
-    q: str = Query(..., min_length=1),
+    q: str = Query(..., min_length=1, max_length=100),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> list[dict]:
     return queries.search_species(conn, q)
@@ -327,6 +504,11 @@ def serve_rank() -> FileResponse:
     return FileResponse("static/rank.html")
 
 
+@app.get("/privacy", include_in_schema=False)
+def serve_privacy() -> FileResponse:
+    return FileResponse("static/privacy.html")
+
+
 # Mounted last and at "/" so it only catches paths no route above already
 # matched -- Starlette tries routes in registration order, and a Mount at "/"
 # would otherwise shadow everything if it came first.
@@ -334,4 +516,4 @@ app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=HOST, port=PORT)

@@ -86,10 +86,24 @@ def _get_classifier():
 
 
 def classify_image_bytes(image_bytes: bytes) -> dict:
-    """Runs the Iberian-restricted classifier on an in-memory image -- never
-    written to disk, decoded straight from bytes and handed to BioCLIP as a
-    PIL Image object (pybioclip's predict() accepts one directly, no temp
-    file needed). Returns {"confident": bool, "candidates": [...]}, up to
+    """Runs the Iberian-restricted classifier on an in-memory image -- this
+    function itself never writes anything to disk, decoding straight from
+    bytes and handing PIL's Image object to BioCLIP directly (pybioclip's
+    predict() accepts one directly, no temp file needed). That alone doesn't
+    guarantee the image was never written to disk ANYWHERE in the request's
+    lifecycle, though -- it previously wasn't true end-to-end, because
+    api.py used to hand this function bytes read from a FastAPI UploadFile,
+    and Starlette's multipart parser spools any upload over 1MB to a real
+    temporary file before this function ever sees it. api.py's
+    /api/identify handler now reads the raw request body directly instead
+    (no multipart parsing at all), which is what actually makes "never
+    written to disk" true end-to-end -- verified by reproducing the exact
+    spooling mechanism, then confirming its absence with a live upload while
+    polling the temp directory for the request's full duration. See
+    CLAUDE.md's "Upload path: no multipart, no disk spooling" design
+    decision for the full story; this docstring only ever described what
+    THIS function does, not the request path leading into it.
+    Returns {"confident": bool, "candidates": [...]}, up to
     MAX_RESULTS candidates each {"bioclip_name", "common_name", "score"},
     highest score first. "confident" is only True when the TOP candidate's
     score clears CONFIDENCE_THRESHOLD -- callers should not present the

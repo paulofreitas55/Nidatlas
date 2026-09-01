@@ -1,0 +1,30 @@
+/* privacy.html only -- reuses .page-title/.site-footer from style.css.
+   Mostly prose, so a narrower measure than the default 1100px `main` reads
+   better than the full width used by data-heavy pages like the atlas grid. */
+
+.privacy-main {
+  max-width: 640px;
+}
+
+.privacy-intro {
+  max-width: 60ch;
+  color: var(--muted);
+  margin: 0.25rem 0 1.5rem;
+}
+
+.privacy-section {
+  margin-bottom: 1.5rem;
+}
+
+.privacy-section h3 {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: var(--green);
+  margin: 0 0 0.4rem;
+}
+
+.privacy-section p {
+  max-width: 60ch;
+  margin: 0;
+  line-height: 1.5;
+}

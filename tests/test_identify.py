@@ -45,8 +45,9 @@ def _tiny_jpeg_bytes() -> bytes:
 
 
 def test_identify_accepts_valid_image_and_returns_expected_shape(client: TestClient) -> None:
-    files = {"file": ("bird.jpg", _tiny_jpeg_bytes(), "image/jpeg")}
-    response = client.post("/api/identify", files=files)
+    response = client.post(
+        "/api/identify", content=_tiny_jpeg_bytes(), headers={"Content-Type": "image/jpeg"}
+    )
     assert response.status_code == 200
 
     body = response.json()
@@ -60,17 +61,28 @@ def test_identify_accepts_valid_image_and_returns_expected_shape(client: TestCli
 
 
 def test_identify_rejects_unsupported_file_type(client: TestClient) -> None:
-    files = {"file": ("notes.txt", b"not an image", "text/plain")}
-    response = client.post("/api/identify", files=files)
+    response = client.post("/api/identify", content=b"not an image", headers={"Content-Type": "text/plain"})
     assert response.status_code == 415
 
 
 def test_identify_rejects_oversized_upload(client: TestClient) -> None:
-    # Sized past the 8MB cap -- rejected on length alone before ever reaching
-    # the (mocked) classifier, so this doesn't need to be a real image.
+    # Sized past IDENTIFY's own 8MB business-rule cap but still under the
+    # app-wide 9MB RequestBodyLimitMiddleware ceiling (see api.py), so this
+    # exercises the route's own len(body) check specifically, not the global
+    # middleware below -- rejected on length alone before ever reaching the
+    # (mocked) classifier, so this doesn't need to be a real image.
     oversized = b"\xff" * (8 * 1024 * 1024 + 1)
-    files = {"file": ("big.jpg", oversized, "image/jpeg")}
-    response = client.post("/api/identify", files=files)
+    response = client.post("/api/identify", content=oversized, headers={"Content-Type": "image/jpeg"})
+    assert response.status_code == 413
+
+
+def test_identify_rejects_upload_past_global_body_size_cap(client: TestClient) -> None:
+    # Exercises the app-wide RequestBodyLimitMiddleware itself (see api.py's
+    # _MAX_REQUEST_BODY_BYTES), a different code path than the route's own
+    # 8MB check above -- this one runs before the request even reaches the
+    # route handler, for ANY endpoint, not just /api/identify.
+    way_oversized = b"\xff" * (10 * 1024 * 1024)
+    response = client.post("/api/identify", content=way_oversized, headers={"Content-Type": "image/jpeg"})
     assert response.status_code == 413
 
 
@@ -79,6 +91,7 @@ def test_identify_rejects_undecodable_image(client: TestClient, monkeypatch: pyt
         raise ValueError("not a decodable image")
 
     monkeypatch.setattr(identification, "classify_image_bytes", raise_value_error)
-    files = {"file": ("bad.jpg", b"not really a jpeg", "image/jpeg")}
-    response = client.post("/api/identify", files=files)
+    response = client.post(
+        "/api/identify", content=b"not really a jpeg", headers={"Content-Type": "image/jpeg"}
+    )
     assert response.status_code == 422

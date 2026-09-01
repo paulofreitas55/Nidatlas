@@ -1,0 +1,18 @@
+# Minimal set actually imported at request time by src/api.py and
+# src/queries.py -- everything else in requirements.txt (pandas, pyarrow,
+# pyshp, shapely, pyproj, mgrs, httpx, pytest) belongs to the offline
+# scripts/ data pipeline and the test suite, not the running server, so it's
+# left out of the Docker image to keep the final layer small. See
+# CLAUDE.md's Deployment section.
+#
+# requirements-identify.txt is installed on top of this, conditionally, by
+# the Dockerfile's INCLUDE_IDENTIFY build arg -- not merged in here.
+#
+# No python-multipart: /api/identify used to need it for FastAPI's
+# UploadFile/File(...) (multipart/form-data parsing), but that parser spools
+# uploads over 1MB to disk -- see api.py's /api/identify handler and
+# CLAUDE.md's upload/disk-spooling design decision -- so the endpoint now
+# reads the raw request body directly instead, and this dependency is
+# genuinely unused.
+fastapi
+uvicorn[standard]

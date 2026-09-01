@@ -3,10 +3,17 @@ httpx
 mgrs
 pandas
 pyarrow
-pybioclip
 pyshp
 pytest
 pyproj
-python-multipart
 shapely
 uvicorn[standard]
+
+# IDENTIFY (pybioclip/torch, ~1.7GB) lives in requirements-identify.txt, not
+# here -- see that file's own header and CLAUDE.md's "IDENTIFY feature
+# isolation" design decision. Install it too if you want to run the IDENTIFY
+# view or scripts/identify.py / build_species_list.py locally.
+#
+# No python-multipart: /api/identify no longer parses multipart/form-data
+# (it reads the raw request body directly -- see api.py and CLAUDE.md's
+# upload/disk-spooling design decision), so nothing in this project needs it.

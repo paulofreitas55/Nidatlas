@@ -20,6 +20,12 @@
     "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografias: {inaturalist}.",
     "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografías: {inaturalist}."
   },
+  "footer.privacy_link": { "en": "Privacy", "pt": "Privacidade", "es": "Privacidad" },
+  "footer.contact_line": {
+    "en": "Report an issue with an image, a licence or the data: {email}",
+    "pt": "Reportar um problema com uma imagem, uma licença ou os dados: {email}",
+    "es": "Reportar un problema con una imagen, una licencia o los datos: {email}"
+  },
 
   "nav.jump_to_order_aria": { "en": "Jump to order", "pt": "Ir para a ordem", "es": "Ir al orden" },
   "nav.jump_to_region_aria": { "en": "Jump to region", "pt": "Ir para a região", "es": "Ir a la región" },
@@ -52,6 +58,11 @@
     "en": "Nidatlas — Identify",
     "pt": "Nidatlas — Identificar",
     "es": "Nidatlas — Identificar"
+  },
+  "page.privacy_title": {
+    "en": "Nidatlas — Privacy",
+    "pt": "Nidatlas — Privacidade",
+    "es": "Nidatlas — Privacidad"
   },
 
   "atlas.page_title": { "en": "Atlas", "pt": "Atlas", "es": "Atlas" },
@@ -289,6 +300,11 @@
     "pt": "Carregue ou tire uma fotografia de uma ave e um modelo de IA irá sugerir a qual das 584 espécies registadas na Ibéria poderá pertencer.",
     "es": "Sube o toma una fotografía de un ave y un modelo de IA sugerirá a cuál de las 584 especies registradas en Iberia podría pertenecer."
   },
+  "identify.privacy_short": {
+    "en": "Your photo is used only to identify the species. It's held just long enough to produce a result, then discarded — never stored, never shared, and never used for anything else.",
+    "pt": "A sua fotografia é usada apenas para identificar a espécie. É mantida só o tempo necessário para produzir um resultado e depois é eliminada — nunca é guardada, partilhada, nem usada para qualquer outro fim.",
+    "es": "Su fotografía se usa únicamente para identificar la especie. Se conserva solo el tiempo necesario para producir un resultado y luego se elimina — nunca se guarda, se comparte, ni se usa para ningún otro fin."
+  },
   "identify.disclaimer_ai": {
     "en": "Results are produced by an AI model and may be wrong.",
     "pt": "Os resultados são produzidos por um modelo de IA e podem estar errados.",
@@ -320,5 +336,30 @@
   "identify.error_unsupported_type": { "en": "Unsupported file type — use JPEG, PNG or WebP.", "pt": "Tipo de ficheiro não suportado — use JPEG, PNG ou WebP.", "es": "Tipo de archivo no admitido — use JPEG, PNG o WebP." },
   "identify.error_undecodable": { "en": "Could not read that image file.", "pt": "Não foi possível ler esse ficheiro de imagem.", "es": "No se pudo leer ese archivo de imagen." },
   "identify.error_rate_limited": { "en": "Too many requests — please wait a moment and try again.", "pt": "Demasiados pedidos — aguarde um momento e tente novamente.", "es": "Demasiadas solicitudes — espere un momento e inténtelo de nuevo." },
-  "identify.error_unavailable": { "en": "Identification is temporarily unavailable.", "pt": "A identificação está temporariamente indisponível.", "es": "La identificación no está disponible temporalmente." }
+  "identify.error_unavailable": { "en": "Identification is temporarily unavailable.", "pt": "A identificação está temporariamente indisponível.", "es": "La identificación no está disponible temporalmente." },
+
+  "privacy.page_title": { "en": "Privacy", "pt": "Privacidade", "es": "Privacidad" },
+  "privacy.intro": {
+    "en": "Nidatlas is a public bird atlas. This page explains, in plain terms, what happens to your data when you use it.",
+    "pt": "O Nidatlas é um atlas de aves público. Esta página explica, em termos simples, o que acontece aos seus dados quando o utiliza.",
+    "es": "Nidatlas es un atlas de aves público. Esta página explica, en términos sencillos, qué ocurre con sus datos cuando lo utiliza."
+  },
+  "privacy.identify_title": { "en": "Photo identification (Identify)", "pt": "Identificação por fotografia (Identificar)", "es": "Identificación por fotografía (Identificar)" },
+  "privacy.identify_body": {
+    "en": "When you use the Identify view, your photo is sent to our server only to run species identification against it. It's used solely for that purpose — never shared with anyone else, never used for anything beyond identifying the species in that one photo, and not kept once a result has been returned to you. No account, name, or other personal information is required to use it.",
+    "pt": "Quando utiliza a vista Identificar, a sua fotografia é enviada ao nosso servidor apenas para executar a identificação da espécie. É usada exclusivamente para esse fim — nunca é partilhada com mais ninguém, nunca é usada para nada além de identificar a espécie nessa fotografia, e não é conservada depois de lhe ser devolvido um resultado. Não é necessária conta, nome ou qualquer outra informação pessoal para a usar.",
+    "es": "Cuando utiliza la vista Identificar, su fotografía se envía a nuestro servidor únicamente para ejecutar la identificación de la especie. Se usa exclusivamente para ese fin — nunca se comparte con nadie más, nunca se usa para nada más allá de identificar la especie en esa fotografía, y no se conserva una vez que se le devuelve un resultado. No se necesita cuenta, nombre ni ninguna otra información personal para usarla."
+  },
+  "privacy.general_title": { "en": "Using Nidatlas generally", "pt": "Utilização geral do Nidatlas", "es": "Uso general de Nidatlas" },
+  "privacy.general_body": {
+    "en": "No account or sign-in is needed for anything on this site. The only thing remembered about a visit is your chosen language (Portuguese, Spanish or English), which is stored in your own browser and never sent to us.",
+    "pt": "Não é necessária conta nem início de sessão para nada neste site. A única coisa memorizada sobre uma visita é o idioma escolhido (português, espanhol ou inglês), que é guardado no seu próprio navegador e nunca é enviado para nós.",
+    "es": "No se necesita cuenta ni inicio de sesión para nada en este sitio. Lo único que se recuerda de una visita es el idioma elegido (portugués, español o inglés), que se guarda en su propio navegador y nunca se nos envía."
+  },
+  "privacy.contact_title": { "en": "Questions or issues", "pt": "Dúvidas ou problemas", "es": "Dudas o problemas" },
+  "privacy.contact_body": {
+    "en": "To report a problem with a species photo, its licence, or the underlying data, contact: {email}",
+    "pt": "Para reportar um problema com uma fotografia de espécie, a sua licença, ou os dados subjacentes, contacte: {email}",
+    "es": "Para reportar un problema con una fotografía de especie, su licencia, o los datos subyacentes, contacte: {email}"
+  }
 }

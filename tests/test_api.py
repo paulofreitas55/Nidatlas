@@ -46,6 +46,14 @@ def test_search_finds_merula(client: TestClient) -> None:
     assert all("merula" in r["gbif_name"].lower() for r in results)
 
 
+def test_search_query_too_long_gives_422(client: TestClient) -> None:
+    # q has a 100-char max_length (see api.py's api_search_species) so an
+    # unbounded search string can't force a 5-column LIKE scan over
+    # arbitrarily long input.
+    response = client.get("/api/species", params={"q": "a" * 101})
+    assert response.status_code == 422
+
+
 def test_unknown_species_id_gives_404(client: TestClient) -> None:
     response = client.get("/api/species/999999")
     assert response.status_code == 404

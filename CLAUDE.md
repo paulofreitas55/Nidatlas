@@ -41,24 +41,34 @@ prints a few real queries to the console.
 handler is a few lines: call the matching query function, translate
 `ValueError` (not-found) into a 404. Also serves the static frontend
 directly (`StaticFiles` mounted at `/`, with explicit routes for `/`,
-`/map`, `/tree`, `/rank` and (when enabled) `/identify`, since a
+`/map`, `/tree`, `/rank`, `/privacy` and (when enabled) `/identify`, since a
 same-directory HTML file under a different name needs an explicit route —
-`StaticFiles(html=True)` only auto-serves `index.html`). Runs a `no-store`
-`Cache-Control` middleware on every response — this is a local/dev-oriented
-choice (see the comment in `api.py`), revisit before a real public
-deployment where you'd want real caching back. `GET /api/config` reports
+`StaticFiles(html=True)` only auto-serves `index.html`). Runs a
+`Cache-Control` middleware on every response — static assets get a 1-day
+`public, max-age` (see the "Cache-Control policy" design decision below for
+why not longer), `/api/*` GETs get a 1-minute one, and `/api/health`,
+`/api/config` and `/api/identify` stay `no-store`; this replaced an earlier
+unconditional `no-store` on every response once the app moved from
+local-dev-only to actually being deployed (see Deployment below). Binds to
+`HOST`/`PORT` env vars (default `0.0.0.0:8000`, was hardcoded
+`127.0.0.1:8000` before containerization — see Deployment). `GET /api/config` reports
 `{"identify_enabled": bool}` so the static frontend can decide at runtime
 whether to show the IDENTIFY nav link/page (see below). `POST /api/identify`
 (only registered when `ENABLE_IDENTIFY` is set — see "IDENTIFY feature
-isolation" in Design decisions) accepts a multipart image upload, enforces
-a max file size and an allowed-MIME-type list, rate-limits by client IP (a
-simple in-process sliding-window counter — no new dependency; see the
-comment above it in `api.py`), and delegates to `src/identification.py`.
+isolation" in Design decisions) accepts a raw image POST body (not
+multipart/form-data — see "Upload path: no multipart, no disk spooling" in
+Design decisions for why), enforces a max file size and an allowed-MIME-type
+list, rate-limits by client IP (an in-process sliding-window counter shared
+with the general `/api/*` limiter below — no new dependency; see
+`_SlidingWindowRateLimiter` in `api.py`), and delegates to
+`src/identification.py`.
 
 **Identification** (`src/identification.py`): the web-facing counterpart to
 `scripts/identify.py`'s CLI, both restricted to Iberia's 584 species (see
 "BioCLIP's label space restricted to Iberian species" below). Classifies an
-in-memory image (never written to disk) and returns up to 5 candidates with
+in-memory image (genuinely never written to disk, end to end — see "Upload
+path: no multipart, no disk spooling" in Design decisions for how this is
+verified, not assumed) and returns up to 5 candidates with
 confidence scores; `api.py` then maps each candidate's `bioclip_name` back
 to a species row via `queries.species_by_bioclip_names`. Deliberately keeps
 every `torch`/`bioclip`/PIL import lazy, inside the functions that actually
@@ -68,7 +78,7 @@ isolation" in Design decisions for the full reasoning and how this combines
 with `ENABLE_IDENTIFY` end to end.
 
 **Frontend** (`static/`, no build step, no framework, no bundler — plain
-`<script>` tags): six pages sharing common CSS/JS.
+`<script>` tags): seven pages sharing common CSS/JS.
 - `atlas.html` + `app.js` — the landing page (served at `/`). The full
   584-species card grid, grouped by order/family, with search.
 - `map.html` + `map.css` + `map.js` — served at `/map`. The 97-region
@@ -112,7 +122,16 @@ with `ENABLE_IDENTIFY` end to end.
   geolocation, opt-in via a button, but the server discarded it unread
   (`identification.classify_image_bytes()` never took a location argument)
   — a real privacy exposure for zero benefit, so it was removed rather than
-  wired up or kept dormant. Mobile-first CSS (this is the view most likely
+  wired up or kept dormant. Above the upload buttons, `.identify-disclaimer`
+  carries a short, always-visible privacy line (`identify.privacy_short` —
+  photo used only to identify the species, discarded once a result is
+  returned, never stored or shared) alongside the existing AI-may-be-wrong
+  and species-scope notices, so a visitor sees this BEFORE choosing a photo,
+  not buried in a footer — see the "Privacy notice wording" design decision
+  for exactly why it doesn't claim "in memory only" as an absolute
+  guarantee. The site's fuller privacy statement lives on its own page,
+  `privacy.html`, linked from every page's footer (see `lang.js`'s
+  `renderFooter()` below). Mobile-first CSS (this is the view most likely
   used outdoors, camera in hand). Renders
   results one of two ways depending on the response's `confident` flag,
   never both: a real candidate list (thumbnail via the shared
@@ -129,6 +148,21 @@ with `ENABLE_IDENTIFY` end to end.
   that results come from an AI model and may be wrong, and that the model
   can only name one of the 584 Iberian species even when the photo is of
   something else entirely.
+- `privacy.html` + `privacy.css` + `privacy.js` — served at `/privacy`,
+  linked from every page's footer (`renderFooter()` in `lang.js`), not from
+  the top nav — it's a reference page, not a primary section the way
+  ATLAS/MAP/TREE/RANK/IDENTIFY are. Entirely static prose (what's processed
+  during photo identification, what's not stored, that no account is needed
+  anywhere on the site), fully localised like every other page. The one
+  non-static piece is the contact line: `privacy.js`'s `renderContactBody()`
+  substitutes a real `mailto:` link into `privacy.contact_body`'s `{email}`
+  token the same way `lang.js`'s `renderFooter()` already does for its own
+  footer lines, since `t()`'s token substitution doesn't build markup and a
+  `data-i18n` binding only sets `textContent`. No geolocation is mentioned
+  anywhere on this page — see the "Privacy notice wording" design decision
+  for why: the feature doesn't exist in this codebase (see the geolocation
+  paragraph above), so stating a policy for it would describe something
+  that isn't there.
 - `cladogram.js` — the shared rectangular-cladogram SVG renderer behind both
   `tree.js` and `species.js`'s tree section: given a small node graph (id,
   children, label, tip/clickable/muted flags), it lays out and draws it,
@@ -141,12 +175,19 @@ with `ENABLE_IDENTIFY` end to end.
   pages needed the same Leaflet setup rather than duplicating it.
 - `lang.js` — the pt/es/en language switch, `t()`/`tPlural()` translation
   lookup, and the declarative `data-i18n*` attribute binder. Loaded by every
-  page before its own script.
+  page before its own script. `renderFooter()` builds all three footer
+  lines directly (not via `data-i18n`, since they mix translated prose with
+  fixed proper nouns/URLs the way `data-i18n` alone can't): the GBIF/
+  attribution lines (unchanged), and `footer-meta-line` — a link to
+  `/privacy` plus a `mailto:` contact line for reporting an issue with an
+  image, a licence or the data, present on every page including `privacy.html`
+  itself, using the same email already used as this project's public contact
+  point in `scripts/fetch_species_images.py`'s own User-Agent string.
 - `style.css` — shared header, footer, card, map-panel, and cladogram
-  (`.cladogram-*`) styles across all six pages. `species.css`/`map.css`/
-  `tree.css`/`rank.css`/`identify.css` hold only what's specific to that one
-  page — check `style.css` first before assuming a rule needs to be added
-  per-page.
+  (`.cladogram-*`) styles across all seven pages. `species.css`/`map.css`/
+  `tree.css`/`rank.css`/`identify.css`/`privacy.css` hold only what's
+  specific to that one page — check `style.css` first before assuming a
+  rule needs to be added per-page.
 - `i18n.json` — every UI string in the app, keyed by dotted key
   (`"page.title": {"en": ..., "pt": ..., "es": ...}`). See Conventions.
 
@@ -422,12 +463,14 @@ called by anything else in the repo.
   `hidden` in the static HTML and is only revealed by `applyFeatureFlags()`
   in `lang.js` after `GET /api/config` confirms `identify_enabled` — so a
   deployment with the feature off shows no trace of it, not just a
-  disabled/broken-looking button. `requirements.txt` still lists
-  `pybioclip` unconditionally today (it's also needed by the offline
-  `scripts/identify.py` and `build_species_list.py`); splitting it into an
-  optional/extra dependency group is Azure-deployment work (see Current
-  state's Next list), not needed until there's an actual Dockerfile to
-  make lean.
+  disabled/broken-looking button. `pybioclip` (and, transitively, PyTorch)
+  now lives in `requirements-identify.txt`, not `requirements.txt` — see
+  Deployment below for how the Dockerfile's `INCLUDE_IDENTIFY` build arg
+  uses that split. `requirements.txt` itself still installs
+  `scripts/identify.py` and `build_species_list.py`'s other dependencies
+  (pandas, pyarrow, shapely, ...) alongside `requirements-identify.txt` for
+  local pipeline work; the Docker image installs neither by default, only
+  `requirements-runtime.txt` (see Deployment).
 - **IDENTIFY confidence threshold: 0.5, chosen from a direct measurement,
   not a guess.** Under the same Iberian-restricted classifier, 5 real
   Iberian species photos (blackbird, house sparrow, serin, blackcap, white
@@ -448,6 +491,28 @@ called by anything else in the repo.
   threshold if the classifier, its species list, or its restriction filter
   ever change materially (see the same "Explain before accepting on schema
   changes" convention this project already applies elsewhere).
+- **Privacy notice wording: no unconditional "in memory only" claim, and no
+  mention of geolocation.** Two deliberate choices behind
+  `identify.privacy_short`/`privacy.identify_body` in `i18n.json`. First:
+  neither string says the photo is "processed in memory only" as an
+  absolute guarantee — an earlier draft did, but that claim was checked
+  against the actual request path (see "Upload path: no multipart, no disk
+  spooling" above) and found false for any upload over 1MB at the time,
+  since Starlette's multipart parser spooled to a real temp file before
+  that bug was fixed. The wording settled on instead ("used only to
+  identify the species... held just long enough to produce a result, then
+  discarded — never stored, never shared") states exactly what's true and
+  user-relevant (not shared, not retained, not used for anything else)
+  without asserting a specific storage mechanism as a promise that a future
+  change to how the request is read could silently break again. Second:
+  neither this notice nor `privacy.html` mentions geolocation at all, in
+  either direction — not "we use your location" (false, see the geolocation
+  paragraph in the `identify.html` bullet above: the feature was built,
+  found to be a privacy exposure for zero benefit, and fully removed) and
+  not "we don't collect your location" either, on the view that a privacy
+  page should describe what the product actually does, not respond to a
+  feature that isn't there — bringing it up at all would imply an
+  ambiguity that doesn't exist.
 - **`data/taxonomy_synonyms.csv`.** GBIF's current taxonomic backbone and
   BioCLIP 2's internal vocabulary disagree on naming for a number of
   species — recent genus splits, spelling variants. This CSV maps GBIF's
@@ -761,6 +826,187 @@ called by anything else in the repo.
   horizontal overflow right after adding an image (or any other
   intrinsically-sized replaced element) to a grid/flex item, this is the
   first thing to check.
+- **Cache-Control policy: 1 day for static assets, 1 minute for `/api/*`
+  GETs, `no-store` for three specific paths — not the same value
+  everywhere.** Replaced the blanket `no-store` (`src/api.py`'s
+  `cache_control_headers` middleware) once the app moved from local-dev-only
+  to actually being containerized and deployed (see Deployment) — under
+  `no-store`, every reload re-fetched every JS/CSS/GeoJSON file and re-ran
+  every `/api/*` query from scratch, which is the right tradeoff for a
+  filesystem that changes every few minutes during development and the wrong
+  one for a deployed image whose contents are fixed until the next rebuild
+  (see decision 1 below). Static assets get the longer of the two values
+  because they change least often, but deliberately not a far-future/
+  `immutable` cache: none of `static/*.js`/`*.css`/`*.html` are served under
+  a content-hashed filename (no build step generates one), so a
+  multi-day-or-longer cache would risk a browser holding onto stale JS/CSS
+  across a redeploy that changes behaviour, for as long as that max-age
+  lasts — 1 day bounds that risk to something a user hitting a real bug
+  would plausibly work around with one hard refresh, without giving up the
+  benefit of caching entirely. `/api/*` GETs get a much shorter 1 minute:
+  their content is likewise fixed for a deployed container's whole lifetime
+  (same `data/nidatlas.db`, see decision 1), so caching them at all is
+  free correctness-wise, but per-route invalidation wasn't worth building
+  for a value this small — 1 minute buys real load reduction on popular
+  endpoints (species list, rankings, region summaries) without needing one.
+  Three paths are hard-excluded from even that: `/api/health` and
+  `/api/config` are cheap enough that caching buys nothing, and a stale
+  cached `/api/config` specifically would be actively wrong (a cached
+  `{"identify_enabled": false}` would hide the IDENTIFY nav link even after
+  an operator turns the feature on); `/api/identify` is a POST with
+  per-request rate-limiting and upload side effects, not a cacheable GET
+  resource in the first place.
+- **The in-process rate limiters assume a single worker — known limitation,
+  not yet redesigned.** `_SlidingWindowRateLimiter` in `src/api.py` (shared
+  by `/api/identify`'s 10/min limiter and the general `/api/*` 100/min one
+  below) keeps its counters in a plain in-memory `dict`, scoped to one
+  Python process. It works correctly today because the app runs as one
+  process (`python src/api.py`, one `uvicorn` worker, no reverse-proxy
+  fan-out). If a future deployment runs multiple worker processes or
+  replicas behind a load balancer (e.g. `uvicorn --workers N`, or horizontal
+  container scaling), each process gets its own independent counters — the
+  effective rate limit becomes `N × (number of processes)` requests/minute
+  per client, not `N`, since a client's requests can land on different
+  workers that don't share state. Not a correctness bug for the current
+  single-process deployment (see Deployment below), but don't scale
+  horizontally without first either moving rate limiting to a
+  reverse-proxy/CDN layer (see the next bullet) or replacing this with a
+  shared store (e.g. Redis) — flagged here deliberately rather than fixed,
+  since nothing about the current deployment needs it yet.
+- **General `/api/*` rate limiting: 100/min per IP, deliberately generous,
+  added alongside IDENTIFY's own tighter 10/min limiter rather than
+  replacing it.** Added from a pre-deployment security review that found
+  every `/api/*` GET except `/api/identify` had no rate limit at all.
+  100/min sits far above normal browsing traffic (even a user rapidly
+  clicking through species/regions won't approach it) but low enough to
+  blunt a script hammering the API — these are cheap read-only SQLite
+  queries against a small local database, not model inference, so the
+  ceiling is intentionally much higher than IDENTIFY's. Implemented as
+  `enforce_general_api_rate_limit`, a `@app.middleware("http")` function
+  checking every `/api/`-prefixed path (including `/api/identify`, which
+  also still passes its own separate, stricter check inside the route —
+  redundant by design, not a bug, since 10/min always binds before 100/min
+  would). **Move this to a reverse-proxy or CDN layer (nginx, Azure Front
+  Door, Cloudflare) once one sits in front of this app** — see the previous
+  bullet for why in-process doesn't scale past one worker, and the next
+  bullet for why it also can't yet correctly identify a real client behind
+  any such proxy.
+- **Rate limiting keys on a proxy-aware client IP, off by default.** Both
+  rate limiters call `_client_ip(request)`, which only reads
+  `X-Forwarded-For` when `TRUST_PROXY_HEADERS=1` is explicitly set — added
+  from the same security review, which flagged that keying on
+  `request.client.host` alone (the previous behaviour) would see every
+  client as the SAME IP once this app sits behind Azure Container Apps'
+  ingress or any other reverse proxy, collapsing every visitor into one
+  shared rate-limit bucket. `X-Forwarded-For` is trusted only behind that
+  flag because the header is otherwise entirely client-suppliable — a
+  client could set it themselves to claim any IP and dodge the limit
+  entirely, which is worse than the collapsed-bucket problem it would
+  otherwise fix. **Only set `TRUST_PROXY_HEADERS=1` when the deployment
+  target's own proxy sets/overwrites this header on every request rather
+  than forwarding a client-supplied one unchanged** — true for Azure
+  Container Apps' built-in ingress and most managed reverse proxies, not
+  necessarily true for an unconfigured raw nginx passthrough.
+- **Upload path: no multipart, no disk spooling — a real bug, found and
+  fixed via direct reproduction both times, not by inspection alone.** The
+  original `/api/identify` implementation used FastAPI's
+  `UploadFile`/`File(...)`, which parses `multipart/form-data` through
+  Starlette's `MultiPartParser`. That parser spools any file part over 1MB
+  (`SpooledTemporaryFile`'s `spool_max_size`, a hardcoded 1MB default) to a
+  REAL temporary file on disk — confirmed by instantiating that exact class
+  with that exact threshold and writing past it, watching `._rolled` flip to
+  `True` and a real path appear on `%TEMP%`\\Linux `/tmp`. Since an ordinary
+  phone photo is routinely several MB (well under the app's own 8MB cap),
+  this meant the documented "never written to disk" privacy promise (see
+  Architecture above, and `identification.py`'s own docstring) was false for
+  the common case — and worse, this spooling happened during FastAPI's own
+  parameter resolution, BEFORE the route handler's manual size check ever
+  ran, so an oversized upload (unbounded — nothing capped request body size
+  at all) would be fully received and spooled before being rejected: a real
+  resource-exhaustion vector, not just a documentation gap. Fixed two ways,
+  deliberately layered:
+  1. **`/api/identify` no longer uses multipart at all.** `identify.js` now
+     POSTs the raw file bytes with its own `Content-Type` header (a `File`
+     object is itself a `Blob`, usable directly as `fetch`'s `body`); the
+     route reads `await request.body()` directly. `Request.body()`/
+     `.stream()` are pure in-memory ASGI reads (confirmed by reading
+     Starlette's own source) with no tempfile involved anywhere — this
+     endpoint's multipart/spooling code path is now structurally
+     unreachable, not merely avoided by a size threshold. `python-multipart`
+     was removed from every requirements file as a result (genuinely
+     unused now, not just unlisted).
+  2. **`RequestBodyLimitMiddleware`** (Starlette's own, `app.add_middleware`d
+     in `api.py` with `max_body_size = _MAX_REQUEST_BODY_BYTES` = 9MB, just
+     above IDENTIFY's 8MB business-rule cap) is a global safety net across
+     every route: it enforces the cap DURING the ASGI receive stream itself
+     (a running total, not just a declared `Content-Length` a client could
+     omit or lie about), so no request body over 9MB is ever fully received
+     by this app at all, regardless of endpoint. **Must be registered FIRST
+     among `app.add_middleware`/`@app.middleware` calls** (before GZip, before
+     the cache/security-header/rate-limit middleware functions) — `add_middleware`
+     inserts each new middleware at the OUTERMOST position, so registering
+     it first makes it the INNERMOST, directly wrapping the router with no
+     `BaseHTTPMiddleware` layer in between. This isn't cosmetic: a
+     `BaseHTTPMiddleware` layer (what every `@app.middleware("http")`
+     function compiles to) sitting between it and the route runs
+     `call_next()` inside its own `anyio` task group, and an exception
+     raised from deep inside a nested `receive()` call (which is how this
+     middleware signals "too large") gets wrapped into an `ExceptionGroup`
+     that no longer matches what `RequestBodyLimitMiddleware`'s own
+     `try/except` is looking for — caught directly during this fix's own
+     testing: registering it last (outermost) produced an unhandled 500
+     crash instead of a clean 413, fixed by moving the registration to be
+     first instead. See `tests/test_identify.py`'s
+     `test_identify_rejects_upload_past_global_body_size_cap`, which
+     exercises this specific path and would fail the same way if the
+     ordering regressed.
+
+  **"Never written to disk" is only claimed again, here and in
+  `identification.py`'s docstring, because it was re-verified the same way
+  the bug was found — not assumed fixed from reading the diff.** A real
+  4.68MB image (well over the 1MB spool threshold) was POSTed through the
+  actual running server with `ENABLE_IDENTIFY=1` and the real model, while a
+  separate thread polled the OS temp directory every 10ms for the request's
+  entire ~27s duration (real CPU inference time): zero new files appeared at
+  any point during or after. Re-run this same check (reproduce the
+  `SpooledTemporaryFile` mechanism directly, then poll the temp directory
+  through a real oversized upload) before ever reintroducing
+  `UploadFile`/`File(...)` to this endpoint, or trusting this claim after
+  any future change to how it reads the request body.
+- **Content-Security-Policy is an explicit allowlist of this app's actual
+  external resources, not a generic template.** `_CONTENT_SECURITY_POLICY`
+  in `api.py` (set by the `security_headers` middleware, alongside
+  `X-Content-Type-Options: nosniff` and `Referrer-Policy:
+  strict-origin-when-cross-origin`) allows exactly three things beyond
+  `'self'`: `https://unpkg.com` (Leaflet's JS/CSS, `script-src`/`style-src`),
+  `https://inaturalist-open-data.s3.amazonaws.com` and
+  `https://upload.wikimedia.org` (hotlinked species photos, `img-src` —
+  matches the two sources in the "Species photos are hotlinked" design
+  decision exactly), and `blob:` (the identify page's own
+  `URL.createObjectURL()` preview of a locally-selected file before upload).
+  No `'unsafe-inline'` for either `script-src` or `style-src` — verified
+  clean first (grepped every `static/*.html` for inline `style="..."`
+  attributes and inline `<script>` bodies: none exist; every dynamic style
+  change in the JS is a CSSOM `element.style.property = ...` assignment,
+  which CSP's `style-src` doesn't restrict, not an HTML `style=` attribute
+  or `<style>` tag, which it does). Verified working, not just written: a
+  headless-Chrome check (CDP, same technique as the tree-view frontend's own
+  interactive-JS verification) loaded `/map` (Leaflet + region polygons
+  render, 0 console errors), `/identify` (page loads, 0 console errors), and
+  `/` (species photos load from the real iNaturalist host, 0 console
+  errors) — no CSP violations logged on any of them. If a future change
+  adds another external resource (a new CDN, a different photo host, a
+  real-time connection), it needs a matching addition to this policy or the
+  browser will silently block it — check `ATTRIBUTIONS.md` for the current
+  list of external hosts this app is allowed to reference.
+- **`/api/species`'s search `q` parameter caps at 100 characters
+  (`max_length=100`).** Found in the same security review: `q` had a
+  `min_length` but no upper bound, so an arbitrarily long search string was
+  accepted and run through `_escape_like` plus a 5-column `LIKE` scan with
+  no supporting index. Low severity (bounded CPU waste, not a crash or
+  injection risk — parameterized throughout, see `search_species` in
+  `src/queries.py`), but cheap to close; 100 characters is far beyond any
+  real species/common name query.
 
 ## Conventions
 
@@ -811,11 +1057,18 @@ called by anything else in the repo.
 
 **Done:** the full data pipeline (species list → cube → SQLite →
 vernacular names → administrative regions → phylogeny → species photos),
-the query layer and FastAPI backend with a 50-test pytest suite, and all
-six frontend pages (species atlas grid landing page, region map, species
+the query layer and FastAPI backend with a 52-test pytest suite, and all
+seven frontend pages (species atlas grid landing page, region map, species
 detail page, tree of life view, occurrence-count ranking, photo
-identification) fully implemented and localized in pt/es/en with shared
-top-level ATLAS/MAP/TREE/RANK/IDENTIFY navigation, in that order. Every species now has a
+identification, privacy) fully implemented and localized in pt/es/en with
+shared top-level ATLAS/MAP/TREE/RANK/IDENTIFY navigation, in that order (the
+privacy page is footer-linked, not part of that top-level nav). Also done:
+a pre-deployment security review and fix pass covering upload handling (no
+multipart parsing, no disk spooling — see "Upload path: no multipart, no
+disk spooling"), request body size limits, general `/api/*` rate limiting,
+proxy-aware client IP handling, and security response headers including a
+real `Content-Security-Policy` — see those design decisions above and the
+Deployment section. Every species now has a
 real, commercially-usable, attributed photo (584/584 — see the "Species
 photo cascade" design decision) shown on its atlas card, its own page and
 the rank lists; a manual review afterward found 40 species with an
@@ -850,15 +1103,21 @@ and passing tests but **not yet committed to git** — run `git status`
 before assuming the working tree matches the last commit.
 
 **Next** (not yet started, roughly in this order):
-1. **Azure deployment.** Docker, GitHub Actions CI/CD, and picking an
-   actual Azure hosting target. Nothing in the repo currently deploys
-   anywhere; everything described above runs locally only. Also the point
-   at which `src/api.py`'s `no-store` `Cache-Control` middleware (a
-   local-dev convenience — see Architecture above) needs revisiting for
-   real caching, and at which `requirements.txt` would actually benefit
-   from splitting `pybioclip`/PyTorch into an optional extra now that
-   ENABLE_IDENTIFY makes that split meaningful for a lightweight
-   container (see "IDENTIFY feature isolation" in Design decisions).
+1. **Azure hosting.** Containerization itself is done and build-verified —
+   see Deployment below (Dockerfile, `.dockerignore`, baked-in data,
+   env-configurable bind address, a real `Cache-Control` policy,
+   `requirements-runtime.txt`/`requirements-identify.txt` split, and the
+   "Measured build/run numbers" table with real image sizes, start times and
+   memory figures for both build variants). Still not started: GitHub
+   Actions CI/CD and picking + configuring an actual Azure hosting target —
+   the image has been built and run locally, including a real IDENTIFY
+   classification end to end (see Deployment), but nothing in the repo
+   pushes it anywhere yet. **Decided: the first deployment ships the
+   default image, `INCLUDE_IDENTIFY=false`** — IDENTIFY's ~6.8GB memory
+   footprint and 77s cold first-request latency are both incompatible with
+   Container Apps scale-to-zero (see the Deployment section's "Decision"
+   paragraph for the full reasoning and the two paths to turning it on
+   later).
 2. Species description text — real photos are now wired in (see
    `fetch_species_images.py` / the "Species photo cascade" design
    decision), but there is still no descriptive text field anywhere.
@@ -888,14 +1147,18 @@ Once `data/nidatlas.db` exists:
 python src/api.py
 ```
 
-Serves on `http://127.0.0.1:8000/` (the species atlas). `/map` is the
-region map. Static files are served with `Cache-Control: no-store`, so a
-plain reload always reflects the latest files on disk — no need to hard-refresh
-during development.
+Serves on `http://0.0.0.0:8000/` (the species atlas) by default — override
+with the `HOST`/`PORT` env vars if you need it bound elsewhere (e.g.
+`HOST=127.0.0.1` for a strictly local-only bind). `/map` is the region map.
+Static files get a 1-day `Cache-Control` (see the "Cache-Control policy"
+design decision) — if you're actively editing a static asset and the 1-day
+cache makes a reload look stale, hard-refresh, or temporarily lower
+`_CACHE_LONG` in `api.py` while developing.
 
-The IDENTIFY view is off by default. To turn it on, `pip install
-pybioclip` (already in `requirements.txt`) and set `ENABLE_IDENTIFY=1`
-before starting the server:
+The IDENTIFY view is off by default. To turn it on, `pip install -r
+requirements-identify.txt` (pulls `pybioclip`/PyTorch — kept out of
+`requirements.txt` itself, see Deployment below) and set
+`ENABLE_IDENTIFY=1` before starting the server:
 
 ```powershell
 $env:ENABLE_IDENTIFY = "1"
@@ -908,6 +1171,250 @@ runs exactly as before — no IDENTIFY nav link, `/identify` and
 imports ever gets touched — see "IDENTIFY feature isolation" in Design
 decisions.
 
+## Deployment
+
+The app runs as a Docker image (see `Dockerfile`/`.dockerignore`); no CI/CD
+or actual cloud hosting target exists yet (see Current state's Next list).
+**Status: build-verified.** Both images (`INCLUDE_IDENTIFY=false` and
+`=true`) have actually been built with `docker build` and run with
+`docker run`, port-mapped, and exercised end to end — every page, every
+`/api/*` route, the GeoJSON files, real photo loading in a headless
+browser, and (for the IDENTIFY image) a real classification request
+through the real model. See "Measured build/run numbers" below for the
+actual figures; this replaced an earlier "written but not build-verified"
+note once Docker was installed and this verification pass ran. Two real
+bugs were caught and fixed by this verification, not by inspection —
+see the `--chown` and `HF_HOME` points below.
+
+**Build:**
+
+```powershell
+docker build -t nidatlas .                                    # IDENTIFY off (default)
+docker build --build-arg INCLUDE_IDENTIFY=true -t nidatlas .   # IDENTIFY on
+```
+
+**Run:**
+
+```powershell
+docker run -p 8000:8000 nidatlas
+docker run -p 8000:8000 -e ENABLE_IDENTIFY=1 nidatlas   # only if built with INCLUDE_IDENTIFY=true
+```
+
+**What's baked into the image, and what isn't.** Per the deliberate choice
+to keep this deployment simple (no external storage, no pipeline step in
+CI): the `Dockerfile` `COPY`s `data/nidatlas.db` and `static/` (which
+already contains the generated `*.geojson` files from a local pipeline
+run — see "Scripts, in rebuild order") straight from the build context into
+the image. There is no runtime data-fetch, no volume mount, no
+refresh-without-rebuild path. **Updating the data (a new GBIF download, a
+schema change, a re-run pipeline script) means rebuilding and redeploying
+the image** — exactly like updating the app code. `.dockerignore` excludes
+the rest of `data/` (raw GBIF CSVs, `cube_clean.parquet`, every API-response
+cache, the curated synonym/override CSVs) since the running server never
+reads them, only `scripts/` does. One deliberate gap: `data/iberian_species.txt`
+(read by `src/identification.py` only when `ENABLE_IDENTIFY` is on) is
+**not** baked in either, since decision scope was "bake `nidatlas.db` and
+the generated GeoJSON files," not every data file IDENTIFY happens to need —
+a deployment that wants `INCLUDE_IDENTIFY=true` **and** a working
+`/api/identify` at runtime currently needs to add that file to the image
+separately (e.g. a follow-up `COPY`); without it, the endpoint fails closed
+with a 503 (`IdentificationUnavailable`), not a crash, since
+`_load_species_names()` already checks the file exists before erroring.
+**The model weights themselves (~1.7GB) are also not baked in**, for the
+same reason — `pybioclip` downloads them from Hugging Face Hub on first use
+if they aren't already cached. This was actually exercised during
+verification: a real `/api/identify` request against a freshly built
+container with `iberian_species.txt` added took **77 seconds** for that
+first call (network download + load) before returning a real result; every
+call after that was under 1 second. A deployment that wants IDENTIFY
+responsive on the very first request after a cold start needs to either
+bake the weights into the image too (a further `COPY` of the Hugging Face
+cache directory, at the cost of ~1.7GB more image size) or keep at least
+one replica warm (no scale-to-zero) so this download only ever happens
+once, not on every cold start.
+
+**Dependency split, three files now instead of one:**
+- `requirements.txt` — the original file, unchanged in spirit: everything
+  needed for the offline pipeline (`scripts/`) and the test suite, run
+  locally. No longer includes `pybioclip`.
+- `requirements-identify.txt` — just `pybioclip` (pulls in PyTorch
+  transitively). Installed on top of `requirements.txt` for local IDENTIFY
+  work; installed on top of `requirements-runtime.txt` in the image only
+  when `INCLUDE_IDENTIFY=true`. See "IDENTIFY feature isolation" in Design
+  decisions for why this split exists at all.
+- `requirements-runtime.txt` — new: just `fastapi` and `uvicorn[standard]`,
+  the only packages `src/api.py`/`src/queries.py` actually import at request
+  time (`python-multipart` was in this file too until the "Upload path: no
+  multipart, no disk spooling" fix made it genuinely unused — see that
+  design decision). This is what the Docker image installs by default —
+  `pandas`/`pyarrow`/`shapely`/`pyproj`/`mgrs`/`httpx`/`pytest` (all
+  pipeline/test-only) are never installed in the image at all, not just
+  excluded from the final layer, keeping both the build and the image
+  smaller than a straight `pip install -r requirements.txt` would.
+
+**Dockerfile shape.** Multi-stage: a `builder` stage creates a venv and
+installs into it (conditionally including `requirements-identify.txt`
+behind the `INCLUDE_IDENTIFY` build arg — see the file's own comments for
+why this is a separate axis from the `ENABLE_IDENTIFY` runtime env var);
+the `final` stage copies just `/opt/venv` plus `src/`, `static/` and
+`data/nidatlas.db` onto a fresh `python:3.13-slim`, and runs as a
+non-root `nidatlas` user (no shell, no home directory — created with
+`--no-create-home --shell /usr/sbin/nologin`, since nothing in the running
+container needs either). Two real bugs were caught by actually building and
+running this, not by reading the Dockerfile:
+- **Every `COPY` in the final stage uses `--chown=nidatlas:nidatlas`, not a
+  trailing `RUN chown -R nidatlas:nidatlas /app`.** The first version of
+  this Dockerfile used the `RUN chown -R` form — measured directly (via
+  `docker history`) to add a SECOND ~220MB layer that was just a full
+  copy-on-write duplicate of the ~220MB the three `COPY`s just wrote
+  (`chown -R` on an overlay filesystem rewrites every file it touches into
+  a new layer), nearly doubling the image for zero benefit. Switching to
+  `--chown` on each `COPY` (which sets ownership as part of the same copy,
+  not a separate pass) dropped the default image from 860MB to 559MB with
+  no other change.
+- **`HF_HOME=/tmp/huggingface` is set explicitly.** Without it, a real
+  `/api/identify` request against the `INCLUDE_IDENTIFY=true` image crashed
+  with `PermissionError: [Errno 13] Permission denied: '/home/nidatlas'` —
+  `huggingface_hub`'s default cache path is `~/.cache/huggingface`, and the
+  `nidatlas` user has no home directory at all (`--no-create-home` above),
+  so that path can't be created. `/tmp` is world-writable by default on
+  this base image, so pointing `HF_HOME` there needs no extra `chown` step.
+  This would have broken IDENTIFY in production for ANY deployment that
+  doesn't pre-bake the model weights, not an edge case — caught only by
+  actually sending a real image through a real running container, not by
+  reading the code.
+- **`requirements-identify.txt`'s `pip install` uses PyTorch's own CPU-only
+  wheel index** (`torch torchvision --index-url
+  https://download.pytorch.org/whl/cpu`, installed BEFORE
+  `requirements-identify.txt` itself so `pybioclip`'s unpinned `torch`
+  dependency is already satisfied and doesn't override it). Without this,
+  pip's default index resolves the CUDA-enabled build of `torch` on Linux —
+  which bundles the full NVIDIA CUDA/cuDNN/cuBLAS/nvidia-nccl runtime
+  regardless of whether a GPU is present. Measured directly: this app
+  always runs `TreeOfLifeClassifier(device="cpu")` (see "BioCLIP's label
+  space restricted to Iberian species" — no code path ever tries to use a
+  GPU), yet the CUDA build alone made the IDENTIFY image **8.57GB**; the
+  CPU-only build produces an identical, verified-working classifier at
+  **2.01GB** — roughly matching this file's own long-standing "~1.7GB of
+  model weights and PyTorch" estimate, which the CUDA build had silently
+  blown past by ~5x.
+
+**Env vars the container reads:** `HOST`/`PORT` (default `0.0.0.0:8000`,
+see the Architecture section's API bullet and "Cache-Control policy" design
+decision for why `0.0.0.0` specifically), `ENABLE_IDENTIFY` (default
+off — see "IDENTIFY feature isolation"), and `TRUST_PROXY_HEADERS` (default
+off — see "Rate limiting keys on a proxy-aware client IP" design decision;
+turn on only once this container actually sits behind a reverse proxy that
+sets/overwrites `X-Forwarded-For` itself).
+
+**Measured build/run numbers** (2026-09-01, Docker Desktop on this
+machine — re-measure if the base image, dependency versions, or host
+hardware change materially):
+
+| | Default (`INCLUDE_IDENTIFY=false`) | IDENTIFY (`INCLUDE_IDENTIFY=true`) |
+|---|---|---|
+| Image size | 559MB | 2.01GB |
+| Clean build time (`--no-cache`) | 37s | 103s |
+| Build warnings | none | none |
+| Container start → `/api/health` 200 | ~1.3s | ~1.15s (model not loaded yet) |
+| Memory at rest | ~41MB | ~40MB (identical — model isn't imported until first `/api/identify` call, see "IDENTIFY feature isolation") |
+| First `/api/identify` request | n/a (route doesn't exist, 404) | **~77s** (downloads + loads the ~1.7GB model — see above) |
+| Subsequent `/api/identify` requests | n/a | ~0.5–1s |
+| Memory after model loaded | n/a | **~6.8GB**, stable across repeated requests (not a leak — checked twice) |
+
+Functional verification performed against the running containers, not just
+inferred from the code: all five views (`/`, `/map`, `/tree`, `/rank`,
+`/identify`) checked by status code — `/identify` correctly 404s on the
+default image; every `/api/*` route used by the frontend spot-checked
+(health, config, species search/list, regions); all three GeoJSON files and
+`i18n.json`/`taxa_labels.json` served with correct byte counts; a real
+headless-Chrome session (same CDP technique as the CSP verification)
+confirmed the atlas grid's photos actually load from the real iNaturalist
+host and the region map's Leaflet/SVG actually renders, with zero console
+errors and zero CSP violations, from inside the container specifically (not
+just the earlier non-container check); response headers (`Cache-Control`,
+`Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`) all
+present and correct; the IDENTIFY image's `/api/identify` was exercised with
+a real 4.68MB photo through the real model (not mocked), confirming both a
+cold (77s) and warm (<1s) response.
+
+**Flags for Azure Container Apps specifically:**
+- **Default image (559MB): no concern.** Well within normal limits for fast
+  pulls and cold starts; ~41MB memory at rest means even ACA's smallest
+  tiers have huge headroom.
+- **IDENTIFY image (2.01GB): a real but manageable cost.** Larger pulls mean
+  slower cold starts than the default image, but 2GB is a routine size for
+  an ML-serving container — not by itself a blocker.
+- **IDENTIFY memory (~6.8GB once the model loads): the actual blocker.**
+  This is NOT a "modest allocation" — it's close to ACA's own per-replica
+  ceiling on standard consumption plans (currently up to 4 vCPU / 8GB), so
+  running IDENTIFY leaves little to no headroom for concurrent requests, OS
+  overhead, or safety margin, and rules out any smaller/cheaper tier
+  entirely. Provision the largest available memory tier if IDENTIFY is
+  enabled, and load-test concurrent `/api/identify` requests before trusting
+  a specific replica count — this was only verified single-request, not
+  under concurrent load.
+- **IDENTIFY's 77-second first-request latency is the other real blocker,
+  specifically for scale-to-zero.** Because the model loads lazily on first
+  use (by design — see "IDENTIFY feature isolation"), every time ACA scales
+  an IDENTIFY-enabled app from zero replicas, the first real user to hit
+  `/api/identify` eats that ~77s download-and-load cost personally, which
+  likely exceeds most gateways'/clients' default request timeouts and would
+  read as a broken feature, not a slow one. Either disable scale-to-zero
+  (keep `minReplicas >= 1`) for this app if IDENTIFY is on, or bake the
+  model weights into the image at build time (not currently done — see the
+  point above) so the cost moves from "first request after every cold
+  start" to "once, at build time."
+
+**Decision: the first Azure deployment ships the default image
+(`INCLUDE_IDENTIFY=false`), IDENTIFY off.** Not a placeholder choice —
+directly forced by the two flags above: ~6.8GB memory and a 77s cold
+first-request are both incompatible with Container Apps' scale-to-zero,
+which is the whole point of using ACA for a low-traffic public atlas rather
+than a fixed always-on VM. Shipping IDENTIFY on for the first deployment
+would mean either paying for an always-on, near-max-memory replica for a
+feature most visits won't touch, or shipping a feature that hangs for 77
+seconds (and risks a gateway timeout) on its first real use after every
+scale-from-zero — neither is acceptable for a v1. The rest of the site
+(atlas, map, tree, rank) has none of these costs (559MB, ~41MB memory,
+~1.3s start) and scales to zero cleanly, so it ships first; see "Current
+state"'s Next list.
+
+Two independent paths to turning IDENTIFY on later, not mutually
+exclusive:
+1. **Kill the 77s cold-start cost: bake the model weights into the image.**
+   Add a build step that pre-populates `HF_HOME`'s cache directory (e.g. a
+   `COPY` of a `~/.cache/huggingface` snapshot fetched once locally, or a
+   `RUN` that loads the classifier once during the build so pybioclip
+   downloads and caches the weights into the image layer itself) so the
+   ~1.7GB download happens once, at build time, never at request time. This
+   fixes the scale-to-zero latency problem entirely but does nothing for
+   the memory problem — image size grows by the weights' ~1.7GB, and the
+   ~6.8GB runtime memory footprint is unchanged (that's the loaded model in
+   RAM, independent of where the weights came from on disk).
+2. **Resolve the memory requirement.** ~6.8GB is what `TreeOfLifeClassifier`
+   actually uses loaded on CPU for this vocabulary size — not yet
+   investigated further (a smaller BioCLIP variant if one exists, quantizing
+   the model, batching-related memory tuning, or simply provisioning a large
+   enough ACA tier/plan and accepting the cost are all open options, none
+   evaluated). Whichever is chosen, re-measure memory the same way this
+   session did (real request, `docker stats` / cgroup `memory.stat`, not
+   estimated) before trusting a new figure.
+
+Both paths need re-verifying under concurrent load before shipping, too —
+see the "Known limitations" note just below.
+
+**Known limitations carried into this deployment, not fixed:** both rate
+limiters (`/api/identify`'s and the general `/api/*` one) are in-process and
+assume a single worker — see that design decision above. The current image
+runs one `uvicorn` worker in one process, so this holds; revisit (or move
+rate limiting to a reverse-proxy/CDN layer instead — see the general-`/api/*`
+design decision) before running multiple workers or replicas. Concurrent
+load on `/api/identify` specifically hasn't been tested at all — the ~6.8GB
+single-request memory figure above says nothing about what happens if
+several requests build/hold concurrent classifier state at once; test this
+before sizing a replica for real traffic.
+
 ## Tests
 
 ```powershell
@@ -916,7 +1423,7 @@ python -m pytest tests/ -q
 
 Requires `data/nidatlas.db` to exist and be fully built (species +
 regions + grid_cells assignment + phylogeny all populated) — the test suite
-hits the real FastAPI app against the real local database, not a mock. 50
+hits the real FastAPI app against the real local database, not a mock. 52
 tests, should all pass on a correctly rebuilt database. `tests/conftest.py`
 sets `ENABLE_IDENTIFY=1` before any test module imports `src/api.py` (that
 flag is read once at import time — see "IDENTIFY feature isolation" in

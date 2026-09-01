@@ -78,11 +78,19 @@ async function onSubmitClick() {
   statusEl.textContent = t("identify.identifying", state.lang);
   document.getElementById("identify-submit-btn").disabled = true;
 
-  const formData = new FormData();
-  formData.append("file", state.file);
-
   try {
-    const response = await fetch("/api/identify", { method: "POST", body: formData });
+    // Sent as the raw file bytes with its own Content-Type, not
+    // multipart/form-data -- the server reads this directly from the
+    // request body instead of through FastAPI's UploadFile, specifically so
+    // the image is never spooled to a temporary file on disk server-side
+    // (see api.py's /api/identify handler for the full reasoning). A
+    // File object is itself a Blob, so it can be used as fetch's body
+    // directly; the browser streams it and sets Content-Length itself.
+    const response = await fetch("/api/identify", {
+      method: "POST",
+      headers: { "Content-Type": state.file.type },
+      body: state.file,
+    });
     if (!response.ok) {
       statusEl.textContent = errorMessageFor(response.status);
       return;

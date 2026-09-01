@@ -35,15 +35,19 @@
       might be.
     </p>
 
-    <div class="identify-disclaimer" role="note">
-      <p data-i18n="identify.disclaimer_ai">Results are produced by an AI model and may be wrong.</p>
-      <p data-i18n="identify.disclaimer_scope">
-        The model only knows Iberia's 584 recorded species. A photo of a bird from elsewhere, or of something
-        that isn't a bird at all, can still produce a result — always check the confidence shown below.
-      </p>
-    </div>
-
     <section id="identify-upload" class="identify-upload">
+      <div class="identify-disclaimer" role="note">
+        <p data-i18n="identify.privacy_short">
+          Your photo is used only to identify the species. It's held just long enough to produce a result,
+          then discarded — never stored, never shared, and never used for anything else.
+        </p>
+        <p data-i18n="identify.disclaimer_ai">Results are produced by an AI model and may be wrong.</p>
+        <p data-i18n="identify.disclaimer_scope">
+          The model only knows Iberia's 584 recorded species. A photo of a bird from elsewhere, or of something
+          that isn't a bird at all, can still produce a result — always check the confidence shown below.
+        </p>
+      </div>
+
       <div class="identify-input-row">
         <label class="identify-input-btn" for="identify-camera-input">
           <span data-i18n="identify.take_photo">Take a photo</span>
@@ -95,6 +99,7 @@
   <footer class="site-footer">
     <p id="footer-data-line"></p>
     <p id="footer-attribution-line"></p>
+    <p id="footer-meta-line"></p>
   </footer>
 
   <script src="lang.js"></script>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy — Nidatlas</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="privacy.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <div class="brand-row">
+        <h1 class="wordmark"><a href="/">Nidatlas</a></h1>
+        <div class="lang-switch" role="group" data-i18n-aria-label="common.lang_switch_aria">
+          <button type="button" class="lang-btn" data-lang="pt">PT</button>
+          <button type="button" class="lang-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+    <nav class="top-nav" role="group" data-i18n-aria-label="nav.primary_aria">
+      <a href="/" class="top-nav-link" data-i18n="nav.atlas">Atlas</a>
+      <a href="/map" class="top-nav-link" data-i18n="nav.map">Map</a>
+      <a href="/tree" class="top-nav-link" data-i18n="nav.tree">Tree</a>
+      <a href="/rank" class="top-nav-link" data-i18n="nav.rank">Rank</a>
+      <a href="/identify" class="top-nav-link nav-identify-link" data-i18n="nav.identify" hidden>Identify</a>
+    </nav>
+  </header>
+
+  <main class="privacy-main">
+    <h2 class="page-title" data-i18n="privacy.page_title">Privacy</h2>
+    <p class="privacy-intro" data-i18n="privacy.intro">
+      Nidatlas is a public bird atlas. This page explains, in plain terms, what happens to your data when you
+      use it.
+    </p>
+
+    <section class="privacy-section">
+      <h3 data-i18n="privacy.identify_title">Photo identification (Identify)</h3>
+      <p data-i18n="privacy.identify_body">
+        When you use the Identify view, your photo is sent to our server only to run species identification
+        against it. It's used solely for that purpose — never shared with anyone else, never used for
+        anything beyond identifying the species in that one photo, and not kept once a result has been
+        returned to you. No account, name, or other personal information is required to use it.
+      </p>
+    </section>
+
+    <section class="privacy-section">
+      <h3 data-i18n="privacy.general_title">Using Nidatlas generally</h3>
+      <p data-i18n="privacy.general_body">
+        No account or sign-in is needed for anything on this site. The only thing remembered about a visit is
+        your chosen language (Portuguese, Spanish or English), which is stored in your own browser and never
+        sent to us.
+      </p>
+    </section>
+
+    <section class="privacy-section">
+      <h3 data-i18n="privacy.contact_title">Questions or issues</h3>
+      <p id="privacy-contact-body"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p id="footer-data-line"></p>
+    <p id="footer-attribution-line"></p>
+    <p id="footer-meta-line"></p>
+  </footer>
+
+  <script src="lang.js"></script>
+  <script src="privacy.js"></script>
+</body>
+</html>

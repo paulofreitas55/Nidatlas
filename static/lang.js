@@ -111,6 +111,18 @@ function renderFooter(lang) {
       inaturalist: `<a href="https://www.inaturalist.org">iNaturalist</a>`,
     });
   }
+
+  // Contact email is fixed (not translated -- see CLAUDE.md's contact
+  // design decision): the same address already used as this project's
+  // public contact point elsewhere (scripts/fetch_species_images.py's own
+  // User-Agent string).
+  const metaLine = document.getElementById("footer-meta-line");
+  if (metaLine) {
+    const contactEmail = "paulo.afonso.freitas.2003@gmail.com";
+    metaLine.innerHTML =
+      `<a href="/privacy">${t("footer.privacy_link", lang)}</a> — ` +
+      t("footer.contact_line", lang, { email: `<a href="mailto:${contactEmail}">${contactEmail}</a>` });
+  }
 }
 
 // --- Runtime feature flags ---
