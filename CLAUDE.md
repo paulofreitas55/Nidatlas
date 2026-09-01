@@ -1367,9 +1367,15 @@ cold (77s) and warm (<1s) response.
   start" to "once, at build time."
 
 **Decision: the first Azure deployment ships the default image
-(`INCLUDE_IDENTIFY=false`), IDENTIFY off.** Not a placeholder choice —
-directly forced by the two flags above: ~6.8GB memory and a 77s cold
-first-request are both incompatible with Container Apps' scale-to-zero,
+(`INCLUDE_IDENTIFY=false`), IDENTIFY off.** This is a deployment/rollout
+scoping decision, not a feature removal — nothing about `src/identification.py`,
+`scripts/identify.py`, the `INCLUDE_IDENTIFY` build arg, or the IDENTIFY
+frontend gets deleted or scaled back; the feature stays fully built, tested,
+and buildable/runnable (locally, or via `docker build --build-arg
+INCLUDE_IDENTIFY=true`) exactly as before. What changes is only which image
+the *first hosted* deployment happens to run. Not a placeholder choice
+either — directly forced by the two flags above: ~6.8GB memory and a 77s
+cold first-request are both incompatible with Container Apps' scale-to-zero,
 which is the whole point of using ACA for a low-traffic public atlas rather
 than a fixed always-on VM. Shipping IDENTIFY on for the first deployment
 would mean either paying for an always-on, near-max-memory replica for a
