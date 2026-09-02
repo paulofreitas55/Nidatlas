@@ -8,7 +8,11 @@ on public GBIF occurrence data.
 
 **Live at [nidatlas.com](https://nidatlas.com).**
 
-![Nidatlas region map](docs/screenshot.png)
+| Atlas | Map |
+|---|---|
+| ![Species atlas grid](docs/screenshot-atlas.png) | ![Region map](docs/screenshot-map.png) |
+| **Tree** | **Rank** |
+| ![Tree of life](docs/screenshot-tree.png) | ![Occurrence ranking](docs/screenshot-rank.png) |
 
 ## What it does
 
