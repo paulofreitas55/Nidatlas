@@ -38,6 +38,7 @@ def test_health_returns_200(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.requires_full_dataset
 def test_search_finds_merula(client: TestClient) -> None:
     response = client.get("/api/species", params={"q": "merula"})
     assert response.status_code == 200
@@ -69,6 +70,7 @@ def test_invalid_mgrs_prefix_gives_422(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+@pytest.mark.requires_full_dataset
 def test_zone_totals_are_internally_consistent(client: TestClient) -> None:
     response = client.get("/api/zones/28S")
     assert response.status_code == 200
@@ -77,6 +79,7 @@ def test_zone_totals_are_internally_consistent(client: TestClient) -> None:
     assert top_species_total <= summary["total_occurrences"]
 
 
+@pytest.mark.requires_full_dataset
 def test_zone_top_species_are_ranked_by_concentration_not_family_share(client: TestClient) -> None:
     # 28S is Madeira's MGRS zone. Regulus madeirensis (Madeira Firecrest) is
     # a Madeira endemic that should rank at or near the top by concentration
@@ -104,6 +107,7 @@ def test_zone_top_species_are_ranked_by_concentration_not_family_share(client: T
     assert bottom_concentrations[0] <= concentrations[-1]
 
 
+@pytest.mark.requires_full_dataset
 def test_zone_bottom_species_meet_minimum_occurrence_threshold(client: TestClient) -> None:
     # Regression test: before MIN_LIST_OCCURRENCES, the bottom list surfaced
     # single-record vagrants (occurrences=1) whose concentration is near
@@ -114,6 +118,7 @@ def test_zone_bottom_species_meet_minimum_occurrence_threshold(client: TestClien
         assert r["occurrences"] >= 5
 
 
+@pytest.mark.requires_full_dataset
 def test_species_cell_count_matches_db(
     client: TestClient, db_conn: sqlite3.Connection, madeirensis_id: int
 ) -> None:
@@ -127,6 +132,7 @@ def test_species_cell_count_matches_db(
     assert len(cells) == expected
 
 
+@pytest.mark.requires_full_dataset
 def test_species_cells_month_filter_returns_subset(client: TestClient, madeirensis_id: int) -> None:
     all_response = client.get(f"/api/species/{madeirensis_id}/cells")
     month_response = client.get(f"/api/species/{madeirensis_id}/cells", params={"month": 1})
@@ -138,6 +144,7 @@ def test_species_cells_month_filter_returns_subset(client: TestClient, madeirens
     assert month_cells <= all_cells
 
 
+@pytest.mark.requires_full_dataset
 def test_all_species_includes_vernacular_name_columns(client: TestClient) -> None:
     response = client.get("/api/species/all")
     assert response.status_code == 200
@@ -147,6 +154,7 @@ def test_all_species_includes_vernacular_name_columns(client: TestClient) -> Non
         assert key in species[0]
 
 
+@pytest.mark.requires_full_dataset
 def test_all_species_dex_number_is_a_stable_1_to_584_sequence(client: TestClient) -> None:
     response = client.get("/api/species/all")
     species = response.json()
@@ -159,6 +167,7 @@ def test_all_species_dex_number_is_a_stable_1_to_584_sequence(client: TestClient
     assert [s["id"] for s in again] == [s["id"] for s in species]
 
 
+@pytest.mark.requires_full_dataset
 def test_species_ranking_covers_all_species_sorted_by_occurrences_desc(client: TestClient) -> None:
     response = client.get("/api/species/ranking")
     assert response.status_code == 200
@@ -171,6 +180,7 @@ def test_species_ranking_covers_all_species_sorted_by_occurrences_desc(client: T
         assert key in ranking[0]
 
 
+@pytest.mark.requires_full_dataset
 def test_species_ranking_ties_share_the_same_rank_number(client: TestClient) -> None:
     # RANK() (not ROW_NUMBER()): species tied on the same total_occurrences
     # must show the same rank, not an arbitrary tie-broken position -- e.g.
@@ -187,6 +197,7 @@ def test_species_ranking_ties_share_the_same_rank_number(client: TestClient) -> 
         assert len(ranks) == 1, f"species tied at {count} occurrences have differing ranks: {ranks}"
 
 
+@pytest.mark.requires_full_dataset
 def test_species_ranking_rank_matches_species_profile_global_rank(
     client: TestClient, madeirensis_id: int
 ) -> None:
@@ -197,6 +208,7 @@ def test_species_ranking_rank_matches_species_profile_global_rank(
     assert entry["rank"] == profile["global_rank"]["rank"]
 
 
+@pytest.mark.requires_full_dataset
 def test_all_species_includes_image_columns_with_valid_shape(client: TestClient) -> None:
     # Doesn't assert exact coverage numbers -- fetch_species_images.py hits
     # live external APIs, so how many of the 584 end up with a photo can
@@ -220,18 +232,21 @@ def test_all_species_includes_image_columns_with_valid_shape(client: TestClient)
             assert "wikimedia.org" in s["image_url"]
 
 
+@pytest.mark.requires_full_dataset
 def test_species_profile_includes_image_fields(client: TestClient, madeirensis_id: int) -> None:
     profile = client.get(f"/api/species/{madeirensis_id}").json()
     for key in ("image_url", "image_source", "image_license", "image_attribution", "image_source_url"):
         assert key in profile
 
 
+@pytest.mark.requires_full_dataset
 def test_species_ranking_includes_image_fields(client: TestClient) -> None:
     ranking = client.get("/api/species/ranking").json()
     for key in ("image_url", "image_source", "image_license", "image_attribution", "image_source_url"):
         assert key in ranking[0]
 
 
+@pytest.mark.requires_full_dataset
 def test_search_finds_species_by_portuguese_name(client: TestClient) -> None:
     response = client.get("/api/species", params={"q": "Melro"})
     assert response.status_code == 200
@@ -239,6 +254,7 @@ def test_search_finds_species_by_portuguese_name(client: TestClient) -> None:
     assert any(r["gbif_name"] == "Turdus merula" for r in results)
 
 
+@pytest.mark.requires_full_dataset
 def test_search_finds_species_by_spanish_name(client: TestClient) -> None:
     response = client.get("/api/species", params={"q": "Mirlo"})
     assert response.status_code == 200
@@ -246,6 +262,7 @@ def test_search_finds_species_by_spanish_name(client: TestClient) -> None:
     assert any(r["gbif_name"] == "Turdus merula" for r in results)
 
 
+@pytest.mark.requires_full_dataset
 def test_species_profile_includes_dex_number_and_vernacular_names(client: TestClient) -> None:
     response = client.get("/api/species/566")
     assert response.status_code == 200
@@ -270,6 +287,7 @@ def madrid_region_id(client: TestClient) -> int:
     return next(r["id"] for r in regions if r["name_en"] == "Madrid")
 
 
+@pytest.mark.requires_full_dataset
 def test_list_regions_returns_districts_islands_and_offshore(client: TestClient) -> None:
     response = client.get("/api/regions")
     assert response.status_code == 200
@@ -289,6 +307,7 @@ def test_list_regions_returns_districts_islands_and_offshore(client: TestClient)
             assert key in r
 
 
+@pytest.mark.requires_full_dataset
 def test_list_regions_includes_individual_azores_islands(client: TestClient) -> None:
     regions = client.get("/api/regions").json()
     names = {r["name_en"] for r in regions}
@@ -303,6 +322,7 @@ def test_unknown_region_id_gives_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+@pytest.mark.requires_full_dataset
 def test_region_summary_totals_are_internally_consistent(
     client: TestClient, madrid_region_id: int
 ) -> None:
@@ -321,6 +341,7 @@ def test_region_summary_totals_are_internally_consistent(
     assert concentrations == sorted(concentrations, reverse=True)
 
 
+@pytest.mark.requires_full_dataset
 def test_region_summary_top_species_differ_between_regions(
     client: TestClient, madrid_region_id: int
 ) -> None:
@@ -338,6 +359,7 @@ def test_region_summary_top_species_differ_between_regions(
     assert madrid_top != coruna_top
 
 
+@pytest.mark.requires_full_dataset
 def test_region_summary_month_filter_returns_subset(
     client: TestClient, madrid_region_id: int
 ) -> None:
@@ -351,11 +373,15 @@ def test_region_summary_month_filter_returns_subset(
     assert 0 < month_total <= all_total
 
 
+@pytest.mark.requires_full_dataset
 def test_region_invalid_month_gives_422(client: TestClient, madrid_region_id: int) -> None:
+    # Marked despite being a pure validation check: it depends on the
+    # madrid_region_id fixture, which needs a real "Madrid" region to exist.
     response = client.get(f"/api/regions/{madrid_region_id}", params={"month": 13})
     assert response.status_code == 422
 
 
+@pytest.mark.requires_full_dataset
 def test_offshore_fallback_region_is_listed_and_queryable(client: TestClient) -> None:
     regions = client.get("/api/regions").json()
     offshore = next(r for r in regions if r["kind"] == "fallback")
@@ -370,6 +396,7 @@ def test_offshore_fallback_region_is_listed_and_queryable(client: TestClient) ->
     assert summary["cell_count"] > 0
 
 
+@pytest.mark.requires_full_dataset
 def test_offshore_region_summary_via_db_lookup(
     client: TestClient, db_conn: sqlite3.Connection
 ) -> None:
@@ -383,6 +410,7 @@ def test_offshore_region_summary_via_db_lookup(
     assert summary["cell_count"] > 0
 
 
+@pytest.mark.requires_full_dataset
 def test_region_cells_endpoint_matches_cell_count(
     client: TestClient, madrid_region_id: int
 ) -> None:
@@ -396,6 +424,7 @@ def test_region_cells_endpoint_matches_cell_count(
             assert key in cell
 
 
+@pytest.mark.requires_full_dataset
 def test_offshore_region_cells_endpoint_returns_points(
     client: TestClient, db_conn: sqlite3.Connection
 ) -> None:
@@ -415,13 +444,17 @@ def test_unknown_region_id_cells_gives_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+@pytest.mark.requires_full_dataset
 def test_grid_cells_region_assignment_matches_regions_table(
     db_conn: sqlite3.Connection,
 ) -> None:
     # Every grid_cells row must have a region assigned (including the
     # offshore fallback) -- none left NULL -- and region_name must match
     # what the regions table says for that region_id, not just be some
-    # independently-set string that could drift out of sync.
+    # independently-set string that could drift out of sync. Marked despite
+    # passing vacuously on an empty database (0 rows trivially satisfies
+    # "0 mismatched") -- that vacuous pass verifies nothing, so this only
+    # has real meaning against the real dataset.
     mismatched = db_conn.execute(
         """
         SELECT COUNT(*) FROM grid_cells gc
@@ -437,6 +470,7 @@ def test_grid_cells_region_assignment_matches_regions_table(
     assert unassigned == 0
 
 
+@pytest.mark.requires_full_dataset
 def test_concurrent_requests_do_not_break_the_db_connection(client: TestClient) -> None:
     # Regression test: get_db() used to open sqlite3 without check_same_thread=False.
     # FastAPI runs a sync generator dependency's setup and teardown as separate
@@ -462,6 +496,7 @@ def phylo_root_id(db_conn: sqlite3.Connection) -> int:
     return db_conn.execute("SELECT id FROM phylo_nodes WHERE parent_id IS NULL").fetchone()[0]
 
 
+@pytest.mark.requires_full_dataset
 def test_phylo_root_matches_the_only_parentless_node(
     client: TestClient, phylo_root_id: int
 ) -> None:
@@ -474,6 +509,7 @@ def test_phylo_root_matches_the_only_parentless_node(
     assert body["name"] is not None  # the root happens to be a named taxon (Neognathae)
 
 
+@pytest.mark.requires_full_dataset
 def test_species_relatives_finds_congeneric_species(
     client: TestClient, db_conn: sqlite3.Connection
 ) -> None:
@@ -526,6 +562,7 @@ def test_species_relatives_unknown_species_gives_404(client: TestClient) -> None
     assert response.status_code == 404
 
 
+@pytest.mark.requires_full_dataset
 def test_species_relatives_species_with_no_tree_placement_returns_empty(client: TestClient) -> None:
     # 289 = Himantopus himantopus, one of the species TNRS resolves to a
     # valid OTT taxon that OToL's synthesis doesn't sample -- see
@@ -537,6 +574,7 @@ def test_species_relatives_species_with_no_tree_placement_returns_empty(client: 
     assert body == {"species_id": 289, "node_id": None, "clade_node_id": None, "relatives": []}
 
 
+@pytest.mark.requires_full_dataset
 def test_phylo_subtree_root_contains_every_placed_species(
     client: TestClient, db_conn: sqlite3.Connection, phylo_root_id: int
 ) -> None:
@@ -554,6 +592,7 @@ def test_phylo_subtree_root_contains_every_placed_species(
     assert len(tip_species_ids) == expected
 
 
+@pytest.mark.requires_full_dataset
 def test_phylo_subtree_of_a_genus_clade_is_smaller_than_the_whole_tree(
     client: TestClient, db_conn: sqlite3.Connection, phylo_root_id: int
 ) -> None:
@@ -581,6 +620,7 @@ def test_phylo_subtree_unknown_node_gives_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+@pytest.mark.requires_full_dataset
 def test_phylo_mrca_of_congeneric_species_is_deeper_than_root(
     db_conn: sqlite3.Connection, phylo_root_id: int
 ) -> None:
@@ -596,6 +636,7 @@ def test_phylo_mrca_of_species_with_no_placement_raises(db_conn: sqlite3.Connect
         queries.phylo_mrca(db_conn, 289, 566)  # 289 = Himantopus himantopus, unplaced
 
 
+@pytest.mark.requires_full_dataset
 def test_phylo_descendant_species_of_turdus_clade_matches_subtree_tips(
     db_conn: sqlite3.Connection,
 ) -> None:

@@ -1102,18 +1102,18 @@ frontend wiring across atlas cards/species pages/rank rows) — is complete
 and passing tests but **not yet committed to git** — run `git status`
 before assuming the working tree matches the last commit.
 
-**Next** (not yet started, roughly in this order):
-1. **Azure hosting.** Containerization itself is done and build-verified —
-   see Deployment below (Dockerfile, `.dockerignore`, baked-in data,
-   env-configurable bind address, a real `Cache-Control` policy,
-   `requirements-runtime.txt`/`requirements-identify.txt` split, and the
-   "Measured build/run numbers" table with real image sizes, start times and
-   memory figures for both build variants). Still not started: GitHub
-   Actions CI/CD and picking + configuring an actual Azure hosting target —
-   the image has been built and run locally, including a real IDENTIFY
-   classification end to end (see Deployment), but nothing in the repo
-   pushes it anywhere yet. **Decided: the first deployment ships the
-   default image, `INCLUDE_IDENTIFY=false`** — IDENTIFY's ~6.8GB memory
+**Done since the "Next" list below was last written:** Azure hosting is
+live (see Deployment) and CI (test-only, see the CI section) runs on every
+push/PR. Still open, in this order:
+1. **Automating the build/push/deploy step itself.** Currently manual (see
+   the CI section's exact commands) — CI cannot do this today because (a)
+   the real image build needs `data/nidatlas.db`, which CI has no way to
+   produce, and (b) OIDC federation to Azure needs an Entra ID app
+   registration, which this subscription's institutional tenant (UTAD)
+   currently blocks for this account. See the CI section's "If
+   app-registration creation ever becomes available" for the exact steps
+   already worked out for when/if that's lifted. **The
+   `INCLUDE_IDENTIFY=false` decision stands** — IDENTIFY's ~6.8GB memory
    footprint and 77s cold first-request latency are both incompatible with
    Container Apps scale-to-zero (see the Deployment section's "Decision"
    paragraph for the full reasoning and the two paths to turning it on
@@ -1173,8 +1173,26 @@ decisions.
 
 ## Deployment
 
-The app runs as a Docker image (see `Dockerfile`/`.dockerignore`); no CI/CD
-or actual cloud hosting target exists yet (see Current state's Next list).
+The app runs as a Docker image (see `Dockerfile`/`.dockerignore`) and is
+**live**: a Container App named `nidatlas` in the `nidatlas-rg` resource
+group (region `francecentral` — not `westeurope`, see the region note
+below), pulling the default (`INCLUDE_IDENTIFY=false`) image from
+`ghcr.io/paulofreitas55/nidatlas` (public, so Container Apps pulls it with
+no registry credentials at all). CI (`.github/workflows/ci.yml`, see the CI
+section near the end of this file) runs the test suite on every push/PR;
+building the image, pushing it, and deploying it to Azure all stay manual
+steps — see the CI section for exactly why and the commands to run.
+
+**Region note:** this subscription (Azure for Students, UTAD tenant) has a
+subscription-level policy restricting deployments to `norwayeast`,
+`francecentral`, `polandcentral`, `belgiumcentral`, `germanywestcentral` —
+discovered directly when `az containerapp env create` failed in
+`westeurope` with `RequestDisallowedByAzure`. `francecentral` was chosen as
+the closest of the allowed regions to Iberia. If this ever moves to a
+different subscription without that restriction, there's no reason to
+change it — just don't assume `westeurope` (or any unlisted region) works
+here without checking `az policy assignment list` first.
+
 **Status: build-verified.** Both images (`INCLUDE_IDENTIFY=false` and
 `=true`) have actually been built with `docker build` and run with
 `docker run`, port-mapped, and exercised end to end — every page, every
@@ -1438,3 +1456,105 @@ which test file pytest happens to import `api` from first;
 `tests/test_identify.py` mocks `identification.classify_image_bytes`
 itself, so the suite never loads the real model and doesn't need
 `pybioclip`/PyTorch installed to run.
+
+37 of these 52 are marked `@pytest.mark.requires_full_dataset` (registered
+in `pytest.ini`) — they assert specific facts only the real, GBIF-derived
+dataset has (a Madeira endemic ranking top-by-concentration, a genuine
+occurrence-count tie, a real MRCA in the Open Tree of Life subtree, the
+Azores' individual named islands, ...), so they're meaningless (or, for a
+handful, vacuously true) against an empty database. This marker exists for
+CI — see the next section — not for local development: running the suite
+locally with no `-m` filter, as above, always runs all 52 against the real
+database and is what to do before merging any change to query logic.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull
+request: install `requirements.txt`, build a schema-only fixture database
+(`scripts/build_fixture_db.py` — every table this project's schema defines,
+reusing `build_database.py`'s own `SCHEMA` string so it can't drift from a
+real rebuild, but zero rows), then `pytest -m "not requires_full_dataset"`
+— the 15 tests that don't need real data content (pure validation/404
+paths, `/api/health`, `/api/identify`'s error paths). This is a genuine,
+non-mocked smoke test (the app actually imports, starts, and answers real
+HTTP requests with the right status codes) but a partial one: it cannot
+catch a regression in query logic itself (a broken ranking, a wrong MRCA)
+— only running the full 52-test suite locally against the real database
+catches that, and must still be done before merging any such change.
+
+**What this workflow deliberately does not do, and why:**
+
+- **It does not build or push a Docker image.** The real deployable image's
+  `Dockerfile` `COPY`s `data/nidatlas.db` (~200MB, gitignored, only
+  derivable via the multi-hour, multiple-live-API GBIF pipeline in
+  `scripts/`) directly into the image — a fresh CI checkout doesn't have
+  this file and has no practical way to produce it. The alternative
+  (building with the same empty schema-only fixture used for tests) was
+  considered and rejected: it would produce a real, plausible-looking,
+  push-able image with zero species/regions/data, indistinguishable from a
+  working one until someone actually browsed it — a worse failure mode than
+  not building an image at all, since it could later be deployed by
+  mistake. Building and pushing the real image stays a manual step (see the
+  command below), exactly as it is today.
+- **It does not deploy to Azure.** Deployment is manual — see the command
+  below — because this repo's Azure subscription sits in an institutional
+  Entra ID tenant (UTAD) that restricts Entra ID app-registration creation
+  to admins, and GitHub Actions → Azure OIDC federation requires creating
+  one (`az ad app create`). This was hit directly while setting this up:
+  the command failed with an authorization error under this account. See
+  "If app-registration creation ever becomes available" below for the
+  exact steps to wire this up once/if that restriction is lifted.
+
+**Manual build/push/deploy, after a green CI run:**
+
+```powershell
+docker build -t ghcr.io/paulofreitas55/nidatlas:latest .
+docker push ghcr.io/paulofreitas55/nidatlas:latest
+az containerapp update --resource-group nidatlas-rg --name nidatlas --image ghcr.io/paulofreitas55/nidatlas:latest
+```
+
+To roll back to a specific previous build, tag and push that commit's image
+with its SHA before pushing `:latest` over it (`docker build -t
+ghcr.io/paulofreitas55/nidatlas:<sha> .`), then point the Container App at
+that specific tag instead of `:latest`:
+
+```powershell
+az containerapp update --resource-group nidatlas-rg --name nidatlas --image ghcr.io/paulofreitas55/nidatlas:<sha>
+```
+
+**If app-registration creation ever becomes available** (UTAD IT grants the
+"Application Developer" role, or this moves to a personal/non-institutional
+subscription), OIDC federation for a future build-and-push-from-CI workflow
+would need, in this order — all worked out and verified against this exact
+subscription except step 1 itself, which is what's currently blocked:
+
+1. `az ad app create --display-name nidatlas-github-actions` — the identity
+   GitHub Actions authenticates as; its `appId` becomes `AZURE_CLIENT_ID`.
+2. `az ad sp create --id <appId>` — a service principal for that app (an
+   app registration alone has no permissions to assign a role to).
+3. `az ad app federated-credential create --id <appId> --parameters
+   '{"name": "nidatlas-main-branch", "issuer":
+   "https://token.actions.githubusercontent.com", "subject":
+   "repo:paulofreitas55/Nidatlas:ref:refs/heads/main", "audiences":
+   ["api://AzureADTokenExchange"]}'` — the `subject` is the actual security
+   boundary (checked cryptographically by Azure against the OIDC token
+   GitHub issues for that specific run), not just documentation; scoped to
+   this repo's `main` branch only, so a fork or PR run cryptographically
+   cannot obtain a token no matter what the workflow file says.
+4. `az role assignment create --assignee-object-id <sp-object-id>
+   --assignee-principal-type ServicePrincipal --role "Container Apps
+   Contributor" --scope /subscriptions/<sub-id>/resourceGroups/nidatlas-rg`
+   — the narrowest built-in role that can update a Container App's image,
+   confirmed against the actual list of built-in roles (not assumed),
+   scoped to just `nidatlas-rg`, not the subscription.
+5. Add `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`
+   (`dc4ee569-c149-48fc-aee9-ce7c6d3b0075`), and `AZURE_SUBSCRIPTION_ID`
+   (`7b1866b5-31f7-4a84-ab32-84f722f7f90e`) as GitHub Actions **variables**
+   (not secrets — none of the three are confidential; that's the actual
+   point of OIDC over a long-lived credential).
+
+If the federated credential ever needs recreating (a new app registration,
+a renamed repo, a different target branch), the `subject` field must be
+regenerated to match exactly — `repo:<owner>/<repo>:ref:refs/heads/<branch>`
+— a stale or mistyped value fails closed (Azure rejects the token
+exchange), not silently.

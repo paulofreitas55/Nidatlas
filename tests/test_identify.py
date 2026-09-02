@@ -44,7 +44,11 @@ def _tiny_jpeg_bytes() -> bytes:
     return buf.getvalue()
 
 
+@pytest.mark.requires_full_dataset
 def test_identify_accepts_valid_image_and_returns_expected_shape(client: TestClient) -> None:
+    # Marked because it asserts a real species (Turdus merula) is resolvable
+    # from the mocked classifier's bioclip_name -- needs species_by_bioclip_names
+    # to actually find a matching row, which an empty fixture DB can't provide.
     response = client.post(
         "/api/identify", content=_tiny_jpeg_bytes(), headers={"Content-Type": "image/jpeg"}
     )

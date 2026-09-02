@@ -1,0 +1,38 @@
+name: CI
+
+# Test-only CI -- deliberately does NOT build or push a Docker image. The
+# real deployable image needs data/nidatlas.db (~200MB, gitignored, only
+# derivable via the multi-hour GBIF-download pipeline in scripts/), which a
+# fresh checkout doesn't have and CI has no way to produce. Building the
+# image here would mean baking in an empty (0 species, 0 regions) database
+# instead, which could later be deployed by mistake -- a worse failure mode
+# than not building an image at all. See CLAUDE.md's CI section for the
+# full reasoning and the manual build/push/deploy commands this replaces.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build schema-only fixture database
+        # Not the real dataset -- every table's schema, zero rows. See
+        # scripts/build_fixture_db.py's own docstring. Only the ~15 tests
+        # NOT marked @pytest.mark.requires_full_dataset can run against
+        # this; the rest are deselected below.
+        run: python scripts/build_fixture_db.py
+
+      - name: Run test suite (excluding tests that need the real dataset)
+        run: python -m pytest tests/ -q -m "not requires_full_dataset"

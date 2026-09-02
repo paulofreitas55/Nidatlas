@@ -2,6 +2,7 @@ fastapi
 httpx
 mgrs
 pandas
+pillow
 pyarrow
 pyshp
 pytest
@@ -17,3 +18,12 @@ uvicorn[standard]
 # No python-multipart: /api/identify no longer parses multipart/form-data
 # (it reads the raw request body directly -- see api.py and CLAUDE.md's
 # upload/disk-spooling design decision), so nothing in this project needs it.
+#
+# pillow: not an app dependency (identification.py's own PIL import is lazy,
+# see "IDENTIFY feature isolation") -- needed here only because
+# tests/test_identify.py builds a real tiny JPEG in-process to test against.
+# Previously present only as an incidental transitive dependency of
+# torchvision (requirements-identify.txt) in a dev venv that had both
+# installed -- a clean install of this file alone was missing it, which a CI
+# environment (installing only this file) would have caught as a test
+# failure. Caught while setting up CI, not by inspection.
