@@ -1,4 +1,5 @@
 import concurrent.futures
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -653,3 +654,122 @@ def test_phylo_descendant_species_of_turdus_clade_matches_subtree_tips(
 def test_phylo_descendant_species_unknown_node_raises(db_conn: sqlite3.Connection) -> None:
     with pytest.raises(ValueError):
         queries.phylo_descendant_species(db_conn, 999999999)
+
+
+@pytest.mark.requires_full_dataset
+def test_species_page_route_returns_server_rendered_metadata(
+    client: TestClient, madeirensis_id: int
+) -> None:
+    response = client.get(f"/species/{madeirensis_id}")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    body = response.text
+    assert "Regulus madeirensis" in body  # substituted into <title> and the JSON-LD block
+    assert f'<link rel="canonical" href="https://nidatlas.com/species/{madeirensis_id}">' in body
+    assert 'property="og:image"' in body
+    assert '"@type": "Taxon"' in body
+
+
+def test_species_page_route_unknown_id_gives_404(client: TestClient) -> None:
+    response = client.get("/species/999999")
+    assert response.status_code == 404
+
+
+def test_legacy_species_html_query_string_redirects_to_clean_path(client: TestClient) -> None:
+    response = client.get("/species.html", params={"id": 1}, follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/species/1"
+
+
+def test_legacy_species_html_with_no_id_gives_404(client: TestClient) -> None:
+    response = client.get("/species.html", follow_redirects=False)
+    assert response.status_code == 404
+
+
+@pytest.mark.requires_full_dataset
+def test_species_page_local_assets_are_root_absolute_not_relative(
+    client: TestClient, madeirensis_id: int
+) -> None:
+    # Regression test for a real bug caught live the first time this route
+    # shipped: /species/{id} is a TWO-segment path, unlike every other page
+    # in this app (/, /map, /tree, /rank -- all one segment). A relative
+    # asset reference like href="style.css" resolves against a two-segment
+    # path's OWN directory ("/species/"), not the site root -- the page
+    # returned 200 with the right server-rendered <title>, but every local
+    # JS/CSS 422'd as /species/lang.js, /species/species.js etc, so
+    # species.js never actually ran and the page stayed on "Loading
+    # species..." forever. See CLAUDE.md's "A relative asset path breaks
+    # once a page is served from a nested URL" design decision.
+    body = client.get(f"/species/{madeirensis_id}").text
+    for tag in (
+        'href="/style.css"', 'href="/species.css"', 'src="/lang.js"',
+        'src="/common.js"', 'src="/cladogram.js"', 'src="/species.js"',
+    ):
+        assert tag in body, f"expected a root-absolute {tag!r} in the served species page"
+    for relative in ('href="style.css"', 'src="lang.js"', 'src="species.js"'):
+        assert relative not in body, f"found a relative asset reference {relative!r} that would 404/422 under /species/<id>"
+
+
+def test_species_js_derives_its_id_from_the_url_path(client: TestClient) -> None:
+    # Regression test for the species.html?id=<id> -> /species/<id> URL
+    # migration: species.js used to read the id ONLY from the query string
+    # (new URLSearchParams(location.search).get("id")). Every real
+    # /species/<id> link now carries no ?id= at all, so a served species.js
+    # that still only checked location.search would derive a null id on
+    # every real page and show "No species specified" -- exactly the
+    # user-reported symptom this test guards against. This project has no
+    # browser/JS test runner (see CLAUDE.md's "no build step, no framework"
+    # frontend philosophy), so this asserts directly on the served source
+    # rather than actually executing it -- the closest available proxy for
+    # "the species page actually loads its data via the new route".
+    source = client.get("/species.js").text
+    assert "location.pathname" in source
+    assert re.search(r"pathMatch\s*\?\s*pathMatch\[1\]\s*:\s*params\.get\(\"id\"\)", source), (
+        "species.js must derive state.id from a /species/<id> path match, "
+        "falling back to the legacy ?id= query string, not the other way around"
+    )
+
+
+@pytest.mark.requires_full_dataset
+def test_phylo_neighbourhood_prunes_a_widely_scattered_relatives_set(
+    client: TestClient, db_conn: sqlite3.Connection
+) -> None:
+    # 390 = Otis tarda (Great Bustard) -- measured directly against this
+    # database as one of several species whose closest relatives by raw
+    # tree-hop distance sit in a sparsely-sampled corner of the Open Tree
+    # synthesis, dragging their MRCA up to a node whose FULL subtree covers
+    # 507 of the tree's 577 tips (phylo_subtree(mrca) would return nearly
+    # the whole tree). This endpoint must prune that down to just the
+    # species, its closest relatives, and the branch points connecting
+    # them -- see phylo_species_neighbourhood's own docstring.
+    response = client.get("/api/species/390/phylo-neighbourhood", params={"limit": 6})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["species_id"] == 390
+    assert body["node_id"] is not None
+    assert body["clade_node_id"] is not None
+
+    nodes = body["nodes"]
+    tips = [n for n in nodes if n["is_tip"]]
+    assert len(tips) < 30  # nowhere near the 507-tip full-MRCA-subtree blowup this replaces
+    assert any(n["species_id"] == 390 for n in tips)  # the species' own tip is always present
+
+    summaries = [n for n in tips if n.get("is_summary")]
+    assert summaries  # Otis tarda's real branch points DO have excluded, collapsed side-branches
+    real_ids = {n["id"] for n in nodes}
+    for s in summaries:
+        assert s["excluded_species_count"] > 0
+        assert s["parent_id"] in real_ids  # attaches to a real backbone node in this same response
+
+    # clade_node_id must be a genuine ancestor of the species' own tip --
+    # sanity-checks that the endpoint didn't just echo back an unrelated id.
+    is_ancestor = db_conn.execute(
+        "SELECT 1 FROM phylo_closure WHERE ancestor_id = ? AND descendant_id = ?",
+        (body["clade_node_id"], body["node_id"]),
+    ).fetchone()
+    assert is_ancestor is not None
+
+
+def test_phylo_neighbourhood_unknown_species_gives_404(client: TestClient) -> None:
+    response = client.get("/api/species/999999/phylo-neighbourhood")
+    assert response.status_code == 404
