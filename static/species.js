@@ -54,8 +54,7 @@ const state = {
   cells: [],
   legendControl: null,
   legendMap: null,
-  phyloRelatives: null, // last GET /api/species/{id}/relatives response
-  phyloSubtree: null, // last GET /api/phylo/{clade_node_id}/subtree response, kept alongside it for lang-switch re-renders with no refetch
+  phyloNeighbourhood: null, // last GET /api/species/{id}/phylo-neighbourhood response, kept for lang-switch re-renders with no refetch
 };
 
 function showError(key) {
@@ -64,8 +63,16 @@ function showError(key) {
 }
 
 async function init() {
+  // Canonical URL is now the clean /species/{id} path (see the FastAPI route
+  // in src/api.py, which server-renders this same species.html with
+  // per-species metadata injected). The old ?id= query string is kept as a
+  // fallback purely so this file still works if ever opened directly against
+  // a static copy without the server-side route in front of it -- every real
+  // link in the app (and /species.html?id=N itself, via a 301) now points at
+  // the path form.
+  const pathMatch = location.pathname.match(/\/species\/(\d+)/);
   const params = new URLSearchParams(location.search);
-  state.id = params.get("id");
+  state.id = pathMatch ? pathMatch[1] : params.get("id");
   const statusEl = document.getElementById("load-status");
 
   try {
@@ -101,7 +108,7 @@ async function init() {
                 count: state.cells.length.toLocaleString(),
               });
       }
-      if (state.phyloRelatives) renderPhylogeny(); // re-render with the new language's vernacular names, no refetch
+      if (state.phyloNeighbourhood) renderPhylogeny(); // re-render with the new language's vernacular names, no refetch
     }
   });
   document.documentElement.lang = state.lang;
@@ -130,6 +137,12 @@ async function init() {
   state.profile = profileResp;
   document.title = `${state.profile.gbif_name} — Nidatlas`;
 
+  // The static, server-rendered summary paragraph (see <!--SEO_SUMMARY--> in
+  // src/api.py's species page renderer) exists so a crawler that doesn't run
+  // JS still sees real content -- once the real interactive page has loaded,
+  // it's redundant for an actual visitor and comes out.
+  document.getElementById("seo-summary")?.remove();
+
   statusEl.hidden = true;
   for (const id of ["identity", "key-figures", "seasonality", "distribution", "phylogeny"]) {
     document.getElementById(id).hidden = false;
@@ -146,15 +159,18 @@ async function init() {
 
 // --- Phylogeny ("Position in the tree of life") ---
 //
-// Two-step fetch: GET /api/species/{id}/relatives ranks the closest species
-// by tree topology and, when the species is placed at all, also names
-// clade_node_id -- the smallest clade actually containing the species AND
-// every relative this response lists (the MRCA of the whole set -- see
-// phylo_mrca_of_node_ids in src/queries.py for why it has to be all of
-// them together, not just a pairwise MRCA with the farthest one).
-// GET /api/phylo/{clade_node_id}/subtree then gives the real connected
-// topology for that clade, which is what static/cladogram.js needs to draw
-// an actual tree rather than just a ranked list.
+// One fetch: GET /api/species/{id}/phylo-neighbourhood already returns a
+// pruned node list -- the species' own tip, its closest handful of
+// relatives, and the branch points connecting them, with anything further
+// away collapsed server-side into a "+N more species" placeholder (see
+// phylo_species_neighbourhood in src/queries.py for why this is NOT the
+// same as the full induced subtree of clade_node_id: that subtree can pull
+// in hundreds of unrelated tips for a species whose nearest relatives, by
+// raw tree-hop count, happen to sit in a sparsely-sampled corner of the
+// Open Tree synthesis). clade_node_id is still returned, unchanged in
+// meaning from the old /relatives-based version -- it's the MRCA of the
+// species and its listed relatives, used only as the scroll/highlight
+// target for the "open in full tree" link below, not as a subtree to draw.
 
 async function loadPhylogeny() {
   const statusEl = document.getElementById("phylo-status");
@@ -166,18 +182,11 @@ async function loadPhylogeny() {
     // renderPhylogeny would otherwise misread as "this species has no tree
     // placement" instead of a real request failure (e.g. an old server
     // process still running without this route).
-    state.phyloRelatives = await fetch(`/api/species/${state.id}/relatives?limit=6`).then(
+    state.phyloNeighbourhood = await fetch(`/api/species/${state.id}/phylo-neighbourhood?limit=6`).then(
       (r) => (r.ok ? r.json() : Promise.reject(r.status))
     );
-    state.phyloSubtree =
-      state.phyloRelatives.clade_node_id != null
-        ? await fetch(`/api/phylo/${state.phyloRelatives.clade_node_id}/subtree`).then(
-            (r) => (r.ok ? r.json() : Promise.reject(r.status))
-          )
-        : null;
   } catch (err) {
-    state.phyloRelatives = null;
-    state.phyloSubtree = null;
+    state.phyloNeighbourhood = null;
     statusEl.textContent = t("species.phylo_error", state.lang);
     return;
   }
@@ -188,13 +197,13 @@ function renderPhylogeny() {
   const statusEl = document.getElementById("phylo-status");
   const canvasEl = document.getElementById("phylo-canvas");
   const linkEl = document.getElementById("phylo-open-tree-link");
-  const rel = state.phyloRelatives;
+  const nb = state.phyloNeighbourhood;
 
-  if (!rel || rel.clade_node_id == null || !state.phyloSubtree) {
+  if (!nb || nb.clade_node_id == null) {
     // A real species can legitimately have no placement at all (see
     // CLAUDE.md) -- that's a normal outcome, not the same as a fetch error,
     // so it gets its own explanatory copy rather than the generic error one.
-    statusEl.textContent = rel && rel.clade_node_id == null
+    statusEl.textContent = nb && nb.clade_node_id == null
       ? t("species.phylo_no_placement", state.lang)
       : t("species.phylo_error", state.lang);
     canvasEl.hidden = true;
@@ -204,20 +213,40 @@ function renderPhylogeny() {
 
   statusEl.textContent = "";
   linkEl.hidden = false;
-  linkEl.href = `tree.html?node=${rel.clade_node_id}`;
+  linkEl.href = `/tree?node=${nb.clade_node_id}`;
 
-  const nodesById = buildNeighbourhoodNodes(state.phyloSubtree.nodes);
+  const nodesById = buildNeighbourhoodNodes(nb.nodes);
   canvasEl.innerHTML = "";
   canvasEl.hidden = false;
+  // Deliberately more compact than tree.js's full-tree defaults (colWidth
+  // 190, labelMargin 300): this view is already pruned down to a handful of
+  // tips (see phylo_species_neighbourhood), but a species whose closest
+  // relatives sit across several REAL nested splits -- not just OToL's
+  // synthesis wrapper chains, see that function's own docstring -- can still
+  // run 8-11 columns deep. A smaller column width, paired with
+  // #phylo-canvas's own smaller cladogram-label font-size and the
+  // max-width:100%/height:auto responsive scaling in species.css, keeps the
+  // whole thing scaling down to fit any viewport width instead of ever
+  // needing horizontal scroll.
   canvasEl.appendChild(
-    renderCladogram(rel.clade_node_id, nodesById, { highlightId: rel.node_id })
+    renderCladogram(nb.clade_node_id, nodesById, {
+      highlightId: nb.node_id,
+      colWidth: 70,
+      labelMargin: 170,
+      rowHeight: 24,
+    })
   );
 }
 
-// Builds cladogram.js's expected node map from a flat GET
-// /api/phylo/{id}/subtree response -- static, non-interactive here (no
-// clickable/onNodeClick): this widget's only way to reach the full tree is
-// the explicit "open in full tree" link, not clicking into the mini view.
+// Builds cladogram.js's expected node map from a GET
+// /api/species/{id}/phylo-neighbourhood response -- static, non-interactive
+// here (no clickable/onNodeClick): this widget's only way to reach the full
+// tree is the explicit "open in full tree" link, not clicking into the mini
+// view. A synthetic is_summary node (the "+N more species" marker for
+// whatever this neighbourhood collapsed away) renders via cladogram.js's
+// existing `collapsed` flag -- built for a user manually collapsing a clade
+// in the full tree view, but the same filled-marker/no-children visual is
+// exactly right here for a branch this view never expands at all.
 function buildNeighbourhoodNodes(rawNodes) {
   const childrenByParent = {};
   for (const n of rawNodes) {
@@ -231,13 +260,20 @@ function buildNeighbourhoodNodes(rawNodes) {
     let label;
     let href = null;
     let muted = false;
-    if (n.is_tip && n.species_id != null) {
+    let collapsed = false;
+    if (n.is_summary) {
+      label = tPlural("species.phylo_more_species", n.excluded_species_count, state.lang, {
+        count: n.excluded_species_count.toLocaleString(),
+      });
+      muted = true;
+      collapsed = true;
+    } else if (n.is_tip && n.species_id != null) {
       const vernacular = pickLabel(
         { pt: n.common_name_pt, es: n.common_name_es, en: n.common_name_en },
         state.lang
       );
       label = vernacular ? `${n.gbif_name} — ${vernacular}` : n.gbif_name;
-      href = `species.html?id=${n.species_id}`;
+      href = `/species/${n.species_id}`;
     } else if (n.is_tip) {
       label = t("tree.unresolved_tip", state.lang);
       muted = true;
@@ -249,12 +285,13 @@ function buildNeighbourhoodNodes(rawNodes) {
     }
     nodesById[n.id] = {
       id: n.id,
-      children: childrenByParent[n.id] || [],
+      children: collapsed ? [] : childrenByParent[n.id] || [],
       label,
       isTip: n.is_tip,
       href,
       clickable: false,
       muted,
+      collapsed,
     };
   }
   return nodesById;

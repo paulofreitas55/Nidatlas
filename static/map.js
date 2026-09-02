@@ -91,14 +91,14 @@ async function init() {
   state.lang = initLangSwitch((lang) => {
     state.lang = lang;
     document.documentElement.lang = lang;
-    document.title = t("page.index_title", lang);
+    document.title = t("page.map_title", lang);
     applyStaticTranslations(lang);
     renderFooter(lang);
     relabelUI();
     if (state.lastSummary) renderRegionPanel(state.lastSummary);
   });
   document.documentElement.lang = state.lang;
-  document.title = t("page.index_title", state.lang);
+  document.title = t("page.map_title", state.lang);
   applyStaticTranslations(state.lang);
   renderFooter(state.lang);
   applyFeatureFlags();
@@ -489,7 +489,7 @@ function renderSpeciesList(ulEl, rows) {
     const li = document.createElement("li");
     const a = document.createElement("a");
     a.className = "region-species-row";
-    a.href = `species.html?id=${row.species_id}`;
+    a.href = `/species/${row.species_id}`;
 
     const name = document.createElement("span");
     name.className = "region-species-name";

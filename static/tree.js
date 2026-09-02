@@ -199,7 +199,7 @@ function buildFullSlice() {
           state.lang
         );
         label = vernacular ? `${raw.gbif_name} — ${vernacular}` : raw.gbif_name;
-        href = `species.html?id=${raw.species_id}`;
+        href = `/species/${raw.species_id}`;
       } else {
         label = t("tree.unresolved_tip", state.lang);
         muted = true;

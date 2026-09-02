@@ -43,6 +43,11 @@
     "pt": "Nidatlas — Aves da Península Ibérica",
     "es": "Nidatlas — Aves de la Península Ibérica"
   },
+  "page.map_title": {
+    "en": "Nidatlas — Bird Distribution Map",
+    "pt": "Nidatlas — Mapa de Distribuição de Aves",
+    "es": "Nidatlas — Mapa de Distribución de Aves"
+  },
   "page.species_fallback_title": { "en": "Species — Nidatlas", "pt": "Espécie — Nidatlas", "es": "Especie — Nidatlas" },
   "page.tree_title": {
     "en": "Nidatlas — Tree of Life",
@@ -131,6 +136,8 @@
     "pt": "Abrir na árvore completa →",
     "es": "Abrir en el árbol completo →"
   },
+  "species.phylo_more_species_one": { "en": "+ {count} more species", "pt": "+ {count} outra espécie", "es": "+ {count} otra especie" },
+  "species.phylo_more_species_other": { "en": "+ {count} more species", "pt": "+ {count} outras espécies", "es": "+ {count} otras especies" },
 
   "map.loading": { "en": "Loading…", "pt": "A carregar…", "es": "Cargando…" },
   "map.no_records": {

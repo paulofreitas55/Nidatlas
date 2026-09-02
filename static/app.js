@@ -262,7 +262,7 @@ function renderFamilyBox(family) {
 function renderCard(sp, query) {
   const a = document.createElement("a");
   a.className = "species-card";
-  a.href = `species.html?id=${sp.id}`;
+  a.href = `/species/${sp.id}`;
 
   const dex = document.createElement("span");
   dex.className = "card-dex";

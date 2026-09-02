@@ -152,7 +152,7 @@ function renderCandidateCard(candidate) {
 
   const a = document.createElement("a");
   a.className = "identify-candidate-link";
-  a.href = `species.html?id=${candidate.id}`;
+  a.href = `/species/${candidate.id}`;
 
   a.appendChild(buildPhotoThumb(candidate, "card-thumb identify-candidate-thumb"));
 

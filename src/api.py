@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 """FastAPI web layer over the query functions in queries.py."""
 
+import html
+import json
 import os
+import pathlib
 import sqlite3
 import time
 from collections import defaultdict
@@ -12,7 +15,7 @@ import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
@@ -440,6 +443,34 @@ def api_species_relatives(
     return {"species_id": species_id, "node_id": node_id, "clade_node_id": clade_node_id, "relatives": relatives}
 
 
+@app.get("/api/species/{species_id}/phylo-neighbourhood")
+def api_species_phylo_neighbourhood(
+    species_id: int,
+    limit: int = Query(6, ge=1, le=15),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    # What species.js's "Position in the tree of life" section actually
+    # renders -- deliberately NOT /relatives + /phylo/{clade_node_id}/subtree
+    # chained together, which is what this page used to do: that subtree is
+    # the FULL induced subtree of the closest relatives' MRCA, which for a
+    # species whose nearest relatives (by raw tree-hop distance) sit in a
+    # sparsely-sampled corner of the Open Tree synthesis can pull in
+    # hundreds of unrelated tips (measured directly: Otis tarda's MRCA
+    # subtree is 507 of the tree's 577 tips) -- see
+    # phylo_species_neighbourhood's own docstring. clade_node_id in the
+    # response is still that same MRCA (used only as a scroll/highlight
+    # target for the "open in full tree" link, which the tree view already
+    # navigates to as a POINT, not by rendering an isolated subtree), so
+    # its meaning is unchanged from /relatives above.
+    try:
+        neighbourhood = queries.phylo_species_neighbourhood(conn, species_id, limit)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
+    if neighbourhood is None:
+        return {"species_id": species_id, "node_id": None, "clade_node_id": None, "nodes": []}
+    return neighbourhood
+
+
 @app.get("/api/phylo/root")
 def api_phylo_root(conn: sqlite3.Connection = Depends(get_db)) -> dict:
     return queries.phylo_tree_root(conn)
@@ -484,14 +515,149 @@ def api_region_cells(
         raise HTTPException(status_code=404, detail=f"no region with id {region_id}")
 
 
+# --- Species pages: server-rendered per-species metadata, clean URL -------
+#
+# Every other page in the app is a static file served verbatim (see the
+# Mount at the bottom of this file). Species pages are the one exception:
+# static/species.html is a JS-only shell (its <title> is a generic
+# placeholder, real content only exists once species.js fetches
+# /api/species/{id} and populates the DOM client-side), which means a crawler
+# that indexes the raw HTTP response -- not everyone runs JS, and even
+# Google's own JS-rendering pass is a slower, separate second wave -- would
+# see nothing species-specific: same title, no description, no way to tell
+# 584 different pages apart. This route fixes that without a template engine
+# or a second copy of the page: it reads the same static/species.html file
+# species.js already drives, and substitutes real per-species content into
+# three markers already sitting in that file (<!--SEO_HEAD-->,
+# <!--SEO_SUMMARY-->, and the placeholder <title>) using plain string
+# replacement. Everything else in the file -- the DOM structure, the
+# <script> tags, species.js itself -- is untouched, so the client-side
+# rendering this page already did keeps working exactly as before; this only
+# adds what a non-JS first pass can see immediately.
+BASE_URL = "https://nidatlas.com"
+_SPECIES_TEMPLATE_PATH = pathlib.Path("static/species.html")
+
+
+def _species_display_name(profile: dict) -> str:
+    return profile.get("common_name_en") or profile["gbif_name"]
+
+
+def _species_meta_description(profile: dict) -> str:
+    return (
+        f"{_species_display_name(profile)} ({profile['gbif_name']}) — a bird of the order "
+        f"{profile['order']}, family {profile['family']}, recorded in the Iberian Peninsula with "
+        f"{profile['total_occurrences']:,} occurrences in the Nidatlas atlas, ranked #{profile['global_rank']['rank']} "
+        f"of {profile['global_rank']['total']} species by total records."
+    )
+
+
+def _species_summary_paragraph(profile: dict) -> str:
+    return (
+        f"{_species_display_name(profile)} ({profile['gbif_name']}) is a species in the order "
+        f"{profile['order']}, family {profile['family']}. Nidatlas records {profile['total_occurrences']:,} "
+        "occurrences of this species across the Iberian Peninsula — Portugal, Spain, and the Azores, Madeira, "
+        f"the Canary Islands and the Balearics — ranking it #{profile['global_rank']['rank']} of "
+        f"{profile['global_rank']['total']} species by total records. This page shows its seasonal pattern, "
+        "geographic distribution down to a 10km grid cell, and position in the bird tree of life."
+    )
+
+
+def _render_species_page(species_id: int, profile: dict) -> str:
+    template = _SPECIES_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    canonical_url = f"{BASE_URL}/species/{species_id}"
+    title = f"{_species_display_name(profile)} ({profile['gbif_name']}) — Nidatlas"
+    title_escaped = html.escape(title)
+    description_escaped = html.escape(_species_meta_description(profile))
+    # Every species already has an image (584/584 -- see CLAUDE.md's photo
+    # cascade design decision), but this fallback keeps og:image valid even
+    # for a hypothetical future species that doesn't.
+    image_url = profile.get("image_url") or f"{BASE_URL}/og/atlas.png"
+
+    # schema.org's Taxon type (used by biology-focused sites and search
+    # engines that understand the bioschemas extension) fits a species
+    # profile page far better than a generic Thing/Article -- name is the
+    # accepted scientific name, alternateName carries whichever vernacular
+    # names this species actually has (not every species has all three, and
+    # a vernacular that just repeats the scientific name -- common before
+    # fetch_vernacular_names.py finds a real one -- is excluded so it isn't
+    # listed as its own "alternate").
+    seen_names: set[str] = set()
+    alternate_names = []
+    for name in (profile.get("common_name_en"), profile.get("common_name_pt"), profile.get("common_name_es")):
+        if name and name != profile["gbif_name"] and name not in seen_names:
+            seen_names.add(name)
+            alternate_names.append(name)
+
+    json_ld: dict = {
+        "@context": "https://schema.org",
+        "@type": "Taxon",
+        "name": profile["gbif_name"],
+        "taxonRank": "species",
+        "parentTaxon": profile["family"],
+        "url": canonical_url,
+        "image": image_url,
+        "description": _species_meta_description(profile),
+    }
+    if alternate_names:
+        json_ld["alternateName"] = alternate_names
+    # "</" -> "<\/": defensive escaping so a JSON string value can never
+    # accidentally close the surrounding <script> tag early. None of this
+    # data can currently contain it, but this is a one-line hedge against
+    # embedding untrusted-shaped text inside HTML, not a response to a real
+    # observed value.
+    json_ld_script = json.dumps(json_ld, ensure_ascii=False).replace("</", "<\\/")
+
+    head_block = (
+        f'<meta name="description" content="{description_escaped}">\n'
+        f'  <link rel="canonical" href="{canonical_url}">\n'
+        '  <meta property="og:type" content="website">\n'
+        f'  <meta property="og:title" content="{title_escaped}">\n'
+        f'  <meta property="og:description" content="{description_escaped}">\n'
+        f'  <meta property="og:url" content="{canonical_url}">\n'
+        f'  <meta property="og:image" content="{html.escape(image_url)}">\n'
+        f'  <script type="application/ld+json">{json_ld_script}</script>'
+    )
+    summary_block = f'<p id="seo-summary" class="seo-summary">{html.escape(_species_summary_paragraph(profile))}</p>'
+
+    page = template.replace("<title>Species — Nidatlas</title>", f"<title>{title_escaped}</title>")
+    page = page.replace("<!--SEO_HEAD-->", head_block)
+    page = page.replace("<!--SEO_SUMMARY-->", summary_block)
+    return page
+
+
+@app.get("/species/{species_id}", include_in_schema=False)
+def serve_species_page(species_id: int, conn: sqlite3.Connection = Depends(get_db)) -> HTMLResponse:
+    try:
+        profile = queries.species_profile(conn, species_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"no species with id {species_id}")
+    return HTMLResponse(_render_species_page(species_id, profile))
+
+
+# The old species.html?id=N URL (every link in the app, and the previous
+# sitemap, used this before the /species/{id} migration above). A 301 here
+# -- not a 404, and not silently leaving the static file reachable under its
+# old URL alongside the new one -- carries over any indexing/link equity a
+# search engine already gave the old URL to the new canonical one instead of
+# creating duplicate-content two ways to reach the same species. Registered
+# ahead of the StaticFiles Mount below, so it fully replaces the raw static
+# file at this exact path; the file itself is still read directly (never
+# served) by _render_species_page above.
+@app.get("/species.html", include_in_schema=False)
+def redirect_legacy_species_url(id: int | None = Query(None)) -> RedirectResponse:
+    if id is None:
+        raise HTTPException(status_code=404)
+    return RedirectResponse(url=f"/species/{id}", status_code=301)
+
+
 # The species atlas is the site's landing page and the region map view
 # lives at /map -- both are plain static files (static/atlas.html,
 # static/map.html), but StaticFiles(html=True) below only auto-serves
 # index.html for "/", not a same-directory file under a different name.
 # These explicit routes are declared ahead of the Mount for that reason;
-# every other static asset (map.js, atlas.html hit directly, species.html,
-# *.geojson, ...) still resolves through the Mount by its own filename
-# exactly as before.
+# every other static asset (map.js, atlas.html hit directly, *.geojson, ...)
+# still resolves through the Mount by its own filename exactly as before.
 @app.get("/", include_in_schema=False)
 def serve_atlas() -> FileResponse:
     return FileResponse("static/atlas.html")

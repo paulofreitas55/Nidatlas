@@ -23,11 +23,16 @@ const XLINK_NS = "http://www.w3.org/1999/xlink";
  * rootId: id to treat as this slice's own root (its real parent, if any, is irrelevant here)
  * options: {
  *   colWidth, rowHeight, highlightId, onNodeClick(id),
+ *   labelMargin: extra width (beyond the deepest column) reserved for label text -- default
+ *     300, enough for a scientific name plus a long vernacular one at the full tree's own font
+ *     size. species.js's compact neighbourhood view passes a smaller value since its labels sit
+ *     at a smaller font size to begin with (see its own renderCladogram call).
  *   alignTips: bool -- when true, every tip's dot stays at its real (depth-based) x, but its
  *     label is pushed out to a shared rightmost column with a dashed guide line connecting the
  *     two, so tip names read as a flush column regardless of how deep each one's branch runs
  *     (the standard published-cladogram layout tree.js uses for the full tree; species.js's
- *     small neighbourhood view leaves this off since its depth range is already tiny).
+ *     small neighbourhood view leaves this off since its depth range is shallow enough not to
+ *     need it).
  * }
  *
  * Returns the <svg> element (not yet attached) so the caller decides how/where to mount it.
@@ -35,6 +40,7 @@ const XLINK_NS = "http://www.w3.org/1999/xlink";
 function renderCladogram(rootId, nodesById, options = {}) {
   const colWidth = options.colWidth || 190;
   const rowHeight = options.rowHeight || 26;
+  const labelMargin = options.labelMargin || 300;
   const onNodeClick = options.onNodeClick || (() => {});
   const highlightId = options.highlightId;
   const alignTips = options.alignTips || false;
@@ -75,7 +81,7 @@ function renderCladogram(rootId, nodesById, options = {}) {
 
   const maxDepth = Math.max(...Object.values(depthOf));
   const tipLabelX = maxDepth * colWidth + 16; // shared right-hand column for aligned tip labels
-  const width = (maxDepth + 1) * colWidth + 300; // +300: room for the deepest column's own label text (a scientific name plus a long vernacular one)
+  const width = (maxDepth + 1) * colWidth + labelMargin; // labelMargin: room for the deepest column's own label text
   const height = leafOrder.length * rowHeight + rowHeight;
 
   const svg = document.createElementNS(SVG_NS, "svg");

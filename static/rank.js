@@ -138,7 +138,7 @@ function renderRow(sp) {
 
   const a = document.createElement("a");
   a.className = "rank-row-link";
-  a.href = `species.html?id=${sp.id}`;
+  a.href = `/species/${sp.id}`;
 
   const rank = document.createElement("span");
   rank.className = "rank-number";

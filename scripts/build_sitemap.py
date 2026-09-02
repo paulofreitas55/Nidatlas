@@ -8,11 +8,12 @@ Means a species-list change needs a rebuild+redeploy to show up here too,
 same tradeoff already accepted and documented (CLAUDE.md's "Data updates
 require a rebuild") for every other derived static file.
 
-Species URLs use the CURRENT real route, species.html?id=<id> -- not a
-clean /species/<id> path, which doesn't exist yet (that would need the
-species pages to become a real per-species FastAPI route with server-
-rendered metadata, a separate, larger piece of work that hasn't been
-built). Regenerate this file if that migration ever happens.
+Species URLs use the clean /species/<id> path -- a real FastAPI route
+(src/api.py's serve_species_page) that server-renders static/species.html
+with per-species <title>/description/canonical/OG/JSON-LD substituted in,
+not the static file directly. The old species.html?id=<id> URL still
+301-redirects to this form (see redirect_legacy_species_url in
+src/api.py) but is never the canonical URL a crawler should index.
 """
 
 import sqlite3
@@ -32,7 +33,7 @@ def main() -> None:
     conn.close()
 
     urls = [f"{BASE_URL}{path}" for path in STATIC_PATHS]
-    urls += [f"{BASE_URL}/species.html?id={sid}" for sid in species_ids]
+    urls += [f"{BASE_URL}/species/{sid}" for sid in species_ids]
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for url in urls:

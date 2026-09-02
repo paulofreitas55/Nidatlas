@@ -19,6 +19,16 @@
   padding: 1rem 1rem 3rem;
 }
 
+/* Server-rendered fallback paragraph (see <!--SEO_SUMMARY--> in
+   src/api.py) -- visible only until species.js loads the real profile and
+   removes it, or permanently for a client that never runs JS at all. */
+.seo-summary {
+  margin: 0.75rem 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* Identity block */
 
 .identity {
@@ -182,6 +192,40 @@
   transform: translateX(-50%);
   padding: 0 1rem; /* matches .species-main's own side padding, since this section no longer sits inside it width-wise */
   box-sizing: border-box;
+}
+
+/* This view is deliberately narrow (species' own tip + its handful of
+   closest relatives -- see phylo_species_neighbourhood in src/queries.py),
+   so unlike tree.html's full-tree canvas (which needs real scroll room and
+   its own zoom control), this one should never need to scroll at all.
+   max-width/height:auto lets the SVG's own viewBox scale it responsively,
+   the same way tree.js's zoom control already scales the full tree's
+   painted output -- text shrinks along with the graphic, which stays
+   legible here because there are only ever a handful of rows and columns
+   after pruning. max-height + overflow-y is a defensive ceiling, not
+   something normal data should ever hit. */
+#phylo-canvas.cladogram-canvas {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#phylo-canvas .cladogram-svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Smaller than the full tree's own .cladogram-label (style.css) to match
+   the compact colWidth/labelMargin species.js passes renderCladogram for
+   this view -- keeps the intrinsic SVG narrower to begin with, so the
+   responsive scaling above has less shrinking left to do on a small
+   screen. */
+#phylo-canvas .cladogram-label {
+  font-size: 0.68rem;
+}
+
+#phylo-canvas .cladogram-node.is-internal .cladogram-label {
+  font-size: 0.62rem;
 }
 
 .phylo-open-tree-link {

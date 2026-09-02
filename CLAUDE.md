@@ -1028,6 +1028,117 @@ static asset — see the Deployment section.
   injection risk — parameterized throughout, see `search_species` in
   `src/queries.py`), but cheap to close; 100 characters is far beyond any
   real species/common name query.
+- **Species pages: a real FastAPI route at `/species/{id}`, not a static
+  file, and no hreflang.** `static/species.html` is a JS-only shell: its raw
+  `<title>` was always the same generic placeholder and every real fact
+  about a species only existed once `species.js` fetched
+  `/api/species/{id}` and populated the DOM client-side — meaning a crawler
+  that indexes the raw HTTP response (not everyone runs JS, and even
+  Google's own JS-rendering pass is a slower, separate second wave) saw
+  nothing to distinguish one of the 584 species pages from another.
+  `api.py`'s `serve_species_page`/`_render_species_page` fix this without a
+  template engine or a second copy of the page: they read the exact same
+  `static/species.html` file `species.js` already drives and substitute
+  real per-species `<title>`, meta description, canonical link, OG tags
+  (`og:image` = that species' own photo), and a schema.org `Taxon`
+  JSON-LD block into three markers already sitting in that file
+  (`<!--SEO_HEAD-->`, `<!--SEO_SUMMARY-->`, the placeholder `<title>`) via
+  plain string replacement — everything else in the file, including
+  `species.js` itself, is untouched, so the client-side render that already
+  worked keeps working exactly as before. The `<!--SEO_SUMMARY-->` marker
+  specifically becomes a real paragraph of species facts (order, family,
+  occurrence count, rank) present in the raw HTML before any JS runs — this
+  is "option B" from this feature's own scoping discussion (metadata alone
+  vs. metadata + a crawlable body summary); `species.js` removes that
+  paragraph once it finishes rendering the real interactive page, so a
+  human visitor never sees the two versions at once. The OLD
+  `species.html?id=<id>` URL 301-redirects to `/species/<id>`
+  (`redirect_legacy_species_url`) rather than staying reachable
+  side-by-side — carrying over whatever indexing/link equity the old URL
+  already had instead of creating two ways to reach the same species.
+  **No hreflang tags anywhere in the app, deliberately**: hreflang exists to
+  tell a crawler "this same content also exists at these other URLs, one
+  per language" — but this site has exactly ONE URL per page in every
+  language (the pt/es/en switcher in `lang.js` re-renders the SAME page
+  in place via `data-i18n`, it never navigates to a language-specific URL),
+  so there are no alternates to declare. Every server-rendered `<title>`/
+  description/`lang="en"` reflects the untranslated default a first,
+  JS-free crawler pass actually sees — matching the same English-only
+  precedent already established for `image_attribution` (see that design
+  decision above) — not a claim that English is the only language this
+  site has.
+- **A relative asset path breaks once a page is served from a nested URL,
+  not just a top-level one — caught directly, not anticipated.** Every
+  other page in this app is served at a single-segment path (`/`, `/map`,
+  `/tree`, `/rank`), where a relative reference like `href="style.css"`
+  resolves correctly to `/style.css` per ordinary URL-resolution rules
+  (removing everything after the final `/` in a single-segment path leaves
+  just `/`). `/species/<id>` is two segments, so that same relative
+  reference instead resolves to `/species/style.css` — confirmed live via a
+  headless-Chrome check that caught the real symptom: `/species/<id>`
+  returned `200` with the right server-rendered `<title>`, but the page
+  stayed stuck on "Loading species…" forever, because `lang.js`/
+  `common.js`/`cladogram.js`/`species.js` and `style.css`/`species.css` were
+  all silently 404ing (well, `422`ing — see below) as `/species/lang.js`
+  etc., never running at all. Fixed by making every local asset reference
+  in `static/species.html` root-absolute (`href="/style.css"`,
+  `src="/lang.js"`, ...), matching how every nav link in the same file
+  already was. If a route is ever added one level deeper than
+  `/species/<id>`, check this again rather than assuming a relative path
+  "just works" the way it does for the site's other, shallower pages.
+  (The `422`s specifically — not `404`s — were `/species/{species_id}`
+  itself catching `lang.js`/`common.js`/etc. as a non-integer path
+  parameter and FastAPI correctly rejecting it as unprocessable; a
+  different route shape would have surfaced as a plain 404 instead, but the
+  underlying bug is the same either way.)
+- **Species page "Position in the tree of life": a pruned neighbourhood via
+  `GET /api/species/{id}/phylo-neighbourhood`, not the closest-relatives'
+  MRCA subtree.** The original version chained `/relatives` (closest
+  relatives by raw tree-hop distance) into `/phylo/{clade_node_id}/subtree`
+  (the FULL induced subtree of their MRCA) — which measured directly
+  against this database, for a species like `Otis tarda` or
+  `Tetrax tetrax`, returns 507 of the tree's 577 tips: their nearest
+  relatives by hop-count sit in a sparsely-sampled corner of the Open Tree
+  synthesis, dragging the MRCA up almost to the root. The resulting widget
+  was both hard to read (the query species buried among hundreds of
+  unrelated tips) and, even for an ordinary species, often too tall/wide
+  for its own space on the page. `phylo_species_neighbourhood` in
+  `src/queries.py` fixes this at the query level, not by asking
+  `cladogram.js` to draw less of what it's given: it keeps only the
+  species' own tip, its closest `limit` relatives (default 6, matching
+  this widget's own pre-existing request size), and the internal branch
+  points that actually sit on a path connecting two of them (found via a
+  `phylo_closure` ancestor/descendant `INTERSECT`, not by re-deriving MRCA
+  logic) — any other branch off that backbone collapses into one synthetic
+  `is_summary` node per branch point, carrying only a real-species count
+  (`"+N more species"`), never expanded. It also collapses single-child
+  pass-through chains along the kept backbone itself, the same idea as
+  `tree.js`'s own `collapseToBranch` for the full tree, reimplemented here
+  in Python since this is computed server-side — without it, a species
+  sitting on one of OToL's long unbranching synthesis runs would still draw
+  a needlessly wide slice even after the tip-count fix above. **A real
+  branch depth of 6-11 columns survives this pruning for some species even
+  so** (measured across all 577 placed species: median 5, p90 7, max 10 at
+  the default limit=6) — NOT a synthesis-wrapper artifact this time but
+  genuine nested topology (verified directly for `Turdus merula`: every
+  level down to its congeners is a real 2-child split, nothing collapsible)
+  — so `species.js`'s call passes `cladogram.js` a deliberately compact
+  `colWidth`/`labelMargin`/`rowHeight` (70/170/24 vs. `tree.js`'s full-view
+  190/300/26) and `species.css` sets a smaller `.cladogram-label` font
+  specifically inside `#phylo-canvas`, on top of (not instead of) the
+  existing `max-width:100%; height:auto` responsive SVG scaling — the same
+  technique `tree.js`'s own zoom control already relies on (see the
+  Frontend section) — so the widget always scales down to fit its
+  container's width instead of ever needing horizontal scroll, on any
+  viewport. `#phylo-canvas` also gets a `max-height`/`overflow-y:auto` cap
+  as a defensive ceiling, not something the pruned data (well under it in
+  every measured case) should normally hit. `clade_node_id` in the
+  response is unchanged in meaning from the old `/relatives` endpoint (kept
+  alongside this new one, still used by and tested on its own merits — see
+  `tests/test_api.py`) — it's still the true MRCA of the species and its
+  listed relatives, used only as the scroll/highlight target for "open in
+  full tree" (`/tree?node=<clade_node_id>`, itself a stale `tree.html?node=`
+  reference fixed alongside this), never as a subtree to render.
 
 ## Conventions
 

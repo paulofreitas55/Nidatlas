@@ -829,6 +829,174 @@ def phylo_subtree(conn: sqlite3.Connection, node_id: int) -> dict:
     return {"root_id": node_id, "node_count": len(nodes), "nodes": nodes}
 
 
+def phylo_species_neighbourhood(conn: sqlite3.Connection, species_id: int, limit: int = 6) -> dict | None:
+    """A species' immediate phylogenetic neighbourhood, pruned for display on
+    its own page -- NOT the full induced subtree of phylo_mrca_of_node_ids(species + its
+    closest_relatives), which some species' corner of the Open Tree
+    synthesis (sparse taxon sampling, or a long single-child chain -- see
+    build_phylogeny_db.py's module docstring) can inflate to hundreds of
+    tips having nothing to do with the ones actually shown: measured
+    directly against this exact database, phylo_subtree(clade_node_id) for
+    species like Otis tarda or Tetrax tetrax returns 507 of the tree's 577
+    tips, because their 6 nearest relatives by raw hop-count sit in
+    genuinely distant, sparsely-sampled corners of the tree, dragging their
+    MRCA up almost to the root.
+
+    This returns instead: the species' own tip, its `limit` closest
+    relatives (see phylo_closest_relatives), and only the internal branch
+    points that actually sit on a path connecting two of them -- any other
+    branch off that path is collapsed into one synthetic summary node per
+    branch point (id f"summary-{parent_id}", is_summary=True,
+    excluded_species_count=<real species under it>), never expanded. Also
+    collapses single-child pass-through chains along the kept backbone
+    itself (the same idea as tree.js's own collapseToBranch for the full
+    tree, applied here in Python since this is server-rendered) -- without
+    that, a species sitting deep in one of OToL's long unbranching runs
+    would still draw a needlessly wide slice even after the tip count above
+    is fixed.
+
+    Returns None if the species has no tree placement at all (a normal,
+    disclosed outcome -- see the module note on phylo_nodes -- not an
+    error).
+    """
+    node_id = phylo_species_node_id(conn, species_id)
+    if node_id is None:
+        return None
+
+    relatives = phylo_closest_relatives(conn, species_id, limit)
+    wanted_ids = [node_id] + [r["node_id"] for r in relatives]
+
+    if len(wanted_ids) == 1:
+        # No relatives at all -- only possible for a maximally isolated
+        # placement (every real run of this tree has 577 connected tips
+        # under one root, so this is a theoretical edge case, not one
+        # observed in practice). The neighbourhood is just the tip itself.
+        nid, is_tip, sid, gbif_name, pt, es, en = conn.execute(
+            """
+            SELECT n.id, n.is_tip, n.species_id, s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en
+            FROM phylo_nodes n JOIN species s ON s.id = n.species_id WHERE n.id = ?
+            """,
+            (node_id,),
+        ).fetchone()
+        node = {
+            "id": nid, "parent_id": None, "is_tip": bool(is_tip), "species_id": sid, "name": None,
+            "gbif_name": gbif_name, "common_name_pt": pt, "common_name_es": es, "common_name_en": en,
+            "is_summary": False,
+        }
+        return {"species_id": species_id, "node_id": node_id, "clade_node_id": node_id, "nodes": [node]}
+
+    root_id = phylo_mrca_of_node_ids(conn, wanted_ids)["node_id"]
+
+    # The backbone: every node that is both an ancestor-or-self of some
+    # wanted tip AND a descendant-or-self of root_id -- i.e. exactly the
+    # nodes on a path between root_id and one of the wanted tips (phylo_closure
+    # carries a self row at depth 0 for every node, so each wanted tip and
+    # root_id itself are included here too).
+    id_placeholders = ",".join("?" * len(wanted_ids))
+    backbone_ids = {
+        row[0]
+        for row in conn.execute(
+            f"""
+            SELECT ancestor_id FROM phylo_closure WHERE descendant_id IN ({id_placeholders})
+            INTERSECT
+            SELECT descendant_id FROM phylo_closure WHERE ancestor_id = ?
+            """,
+            (*wanted_ids, root_id),
+        ).fetchall()
+    }
+    backbone_placeholders = ",".join("?" * len(backbone_ids))
+
+    backbone_by_id = {
+        nid: {
+            "id": nid, "parent_id": parent_id, "is_tip": bool(is_tip), "species_id": sid, "name": name,
+            "gbif_name": gbif_name, "common_name_pt": pt, "common_name_es": es, "common_name_en": en,
+            "is_summary": False,
+        }
+        for nid, parent_id, is_tip, sid, name, gbif_name, pt, es, en in conn.execute(
+            f"""
+            SELECT n.id, n.parent_id, n.is_tip, n.species_id, n.name,
+                   s.gbif_name, s.common_name_pt, s.common_name_es, s.common_name_en
+            FROM phylo_nodes n
+            LEFT JOIN species s ON s.id = n.species_id
+            WHERE n.id IN ({backbone_placeholders})
+            """,
+            tuple(backbone_ids),
+        ).fetchall()
+    }
+
+    # Every real DB child of a backbone node, split into the ones that
+    # continue the backbone (also in backbone_ids) and the ones that don't.
+    # A backbone non-tip node always has AT LEAST one backbone child (the
+    # unique path continuing toward whichever wanted tip put it on the
+    # backbone in the first place -- the same tree property
+    # phylo_mrca_of_node_ids relies on), so every "other" child's entire
+    # subtree is guaranteed to contain none of the wanted tips either.
+    backbone_children: dict[int, list[int]] = {}
+    excluded_children: list[tuple[int, int]] = []
+    for cid, pid in conn.execute(
+        f"SELECT id, parent_id FROM phylo_nodes WHERE parent_id IN ({backbone_placeholders})",
+        tuple(backbone_ids),
+    ).fetchall():
+        if cid in backbone_ids:
+            backbone_children.setdefault(pid, []).append(cid)
+        else:
+            excluded_children.append((cid, pid))
+
+    # Collapse each excluded branch into a single real-species count,
+    # keyed by the backbone parent it attaches to (a parent can have more
+    # than one excluded child -- e.g. two separate distant sister clades --
+    # so these are summed, not kept as separate summary nodes, to avoid
+    # cluttering the view with several "+N" markers off the same point).
+    summary_counts: dict[int, int] = {}
+    for cid, pid in excluded_children:
+        count = conn.execute(
+            """
+            SELECT COUNT(*) FROM phylo_closure c
+            JOIN phylo_nodes n ON n.id = c.descendant_id
+            WHERE c.ancestor_id = ? AND n.is_tip = 1 AND n.species_id IS NOT NULL
+            """,
+            (cid,),
+        ).fetchone()[0]
+        if count:
+            summary_counts[pid] = summary_counts.get(pid, 0) + count
+
+    def effective_target(nid: int) -> int:
+        while True:
+            node = backbone_by_id[nid]
+            if node["is_tip"]:
+                return nid
+            kids = backbone_children.get(nid, [])
+            if len(kids) != 1 or nid in summary_counts:
+                return nid
+            nid = kids[0]
+
+    output_nodes: list[dict] = []
+    seen: set[int] = set()
+
+    def emit(nid: int, parent_out_id: int | None) -> None:
+        target = effective_target(nid)
+        if target in seen:
+            return
+        seen.add(target)
+        node = dict(backbone_by_id[target])
+        node["parent_id"] = parent_out_id
+        output_nodes.append(node)
+        if node["is_tip"]:
+            return
+        for kid in backbone_children.get(target, []):
+            emit(kid, target)
+        if target in summary_counts:
+            output_nodes.append({
+                "id": f"summary-{target}", "parent_id": target, "is_tip": True, "species_id": None, "name": None,
+                "gbif_name": None, "common_name_pt": None, "common_name_es": None, "common_name_en": None,
+                "is_summary": True, "excluded_species_count": summary_counts[target],
+            })
+
+    emit(root_id, None)
+
+    return {"species_id": species_id, "node_id": node_id, "clade_node_id": root_id, "nodes": output_nodes}
+
+
 def _print_species_profile(profile: dict) -> None:
     print(f"=== {profile['gbif_name']} ({profile['bioclip_name']}) ===")
     print(f"{profile['genus']} / {profile['family']} / {profile['order']}")
