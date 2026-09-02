@@ -16,9 +16,9 @@
     "es": "Datos de ocurrencia: GBIF.org, instantánea de {date} — solo registros con licencia CC0 y CC-BY."
   },
   "footer.attribution_line": {
-    "en": "Map data © {osm} contributors, {odbl}. Species identification: {bioclip} ({imageomics}). Phylogeny: {opentree}. Photos: {inaturalist}.",
-    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Identificação de espécies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografias: {inaturalist}.",
-    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Identificación de especies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografías: {inaturalist}."
+    "en": "Map data © {osm} contributors, {odbl}. Administrative regions: {gisco}. Species identification: {bioclip} ({imageomics}). Phylogeny: {opentree}. Photos: {inaturalist}.",
+    "pt": "Dados do mapa © contribuidores do {osm}, {odbl}. Regiões administrativas: {gisco}. Identificação de espécies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografias: {inaturalist}.",
+    "es": "Datos del mapa © colaboradores de {osm}, {odbl}. Regiones administrativas: {gisco}. Identificación de especies: {bioclip} ({imageomics}). Filogenia: {opentree}. Fotografías: {inaturalist}."
   },
   "footer.privacy_link": { "en": "Privacy", "pt": "Privacidade", "es": "Privacidad" },
   "footer.contact_line": {

@@ -1094,13 +1094,13 @@ cladogram (`GET /api/phylo/root` + `GET /api/phylo/{id}/subtree`), and
 (`GET /api/species/{id}/relatives`) in the same style, both via the shared
 `static/cladogram.js` renderer.
 
-**In progress:** nothing actively broken. As of this file's writing, a
-substantial amount of work — the entire region map, the concentration-ratio
-ranking change, this rename, the phylogeny feature end to end, the Tree of
-Life and Rank views, and the species-photo pipeline (fetch, schema, and
-frontend wiring across atlas cards/species pages/rank rows) — is complete
-and passing tests but **not yet committed to git** — run `git status`
-before assuming the working tree matches the last commit.
+**In progress:** nothing actively broken, nothing uncommitted. (This
+paragraph used to warn that a batch of work — the region map, the
+concentration-ratio ranking change, the phylogeny feature, Tree of Life and
+Rank views, the species-photo pipeline — was complete but not yet committed;
+that's stale, it's all been committed and pushed for a while. Still worth
+running `git status` before assuming the working tree matches the last
+commit — it's just not a known-standing exception anymore.)
 
 **Done since the "Next" list below was last written:** Azure hosting is
 live (see Deployment) and CI (test-only, see the CI section) runs on every
@@ -1192,6 +1192,56 @@ the closest of the allowed regions to Iberia. If this ever moves to a
 different subscription without that restriction, there's no reason to
 change it — just don't assume `westeurope` (or any unlisted region) works
 here without checking `az policy assignment list` first.
+
+**Custom domain: `nidatlas.com` and `www.nidatlas.com`, both bound with
+Azure-managed certificates.** DNS is hosted on Cloudflare. Bound via:
+
+```powershell
+az containerapp hostname add -n nidatlas -g nidatlas-rg --hostname nidatlas.com
+az containerapp hostname bind -n nidatlas -g nidatlas-rg --hostname nidatlas.com --environment nidatlas-env --validation-method HTTP
+
+az containerapp hostname add -n nidatlas -g nidatlas-rg --hostname www.nidatlas.com
+az containerapp hostname bind -n nidatlas -g nidatlas-rg --hostname www.nidatlas.com --environment nidatlas-env --validation-method CNAME
+```
+
+`hostname bind` looks up or creates a managed certificate automatically
+when none is specified — no separate `env certificate create` step needed.
+Requires `hostname add` first; binding directly without adding fails with
+`RequireCustomHostnameInEnvironment` (hit this directly, not anticipated).
+
+DNS records (apex uses A + HTTP validation, subdomain uses CNAME + CNAME
+validation — different validation methods per Azure's own requirement):
+
+| Type | Name | Value |
+|---|---|---|
+| TXT | `asuid` | the Container App's `customDomainVerificationId` (`az containerapp show --query properties.customDomainVerificationId`) |
+| A | `@` (apex) | the Container Apps **environment's** static IP (`az containerapp env show --query properties.staticIp`), not the app's own hostname |
+| TXT | `asuid.www` | same verification ID as above — one ID covers every hostname on the same Container App |
+| CNAME | `www` | the Container App's own generated FQDN (e.g. `nidatlas.<hash>.francecentral.azurecontainerapps.io`) — **must point directly at this, never at the apex domain**; an intermediate CNAME hop blocks both certificate issuance and renewal (Microsoft's own docs call this out explicitly) |
+
+**Cloudflare proxy MUST stay DNS-only (grey cloud) on both the `@` A
+record and the `www` CNAME — permanently, not just during initial
+validation.** Caught directly during setup: the apex was briefly proxied
+(orange cloud) and resolved to Cloudflare's own edge IPs
+(`104.21.x.x`/`172.67.x.x` ranges) instead of the real Azure static IP,
+which would have made Azure's HTTP domain-validation request hit
+Cloudflare's edge instead of the actual Container App and fail outright.
+The reason this has to stay grey-cloud forever, not just be flipped back
+after the first successful bind: Azure's managed certificates
+**auto-renew** using the exact same direct-reachability check. Flip proxy
+to orange later and the site keeps working fine right up until the
+certificate's next renewal window, which then silently fails — the failure
+is invisible until the cert actually expires, months after the change that
+caused it. If Cloudflare's CDN/proxy features are ever wanted, that needs a
+different architecture (e.g. Azure Front Door in front of the Container
+App), not just flipping this toggle.
+
+Verified end-to-end after binding, not assumed: `https://nidatlas.com/` and
+`https://www.nidatlas.com/` both return `200` with a valid trusted
+certificate chain (`CN=nidatlas.com`, issued by DigiCert/GeoTrust TLS RSA CA
+G1), `http://nidatlas.com/` redirects to `https://` (`301`), and the
+original `*.azurecontainerapps.io` URL still resolves independently (custom
+domains add hostnames, they don't replace the generated one).
 
 **Status: build-verified.** Both images (`INCLUDE_IDENTIFY=false` and
 `=true`) have actually been built with `docker build` and run with

@@ -161,6 +161,14 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = _CONTENT_SECURITY_POLICY
+    # max-age=63072000 (2 years) + includeSubDomains, matching www.nidatlas.com
+    # also being bound. No "preload": submitting to the browser preload list
+    # is a much harder-to-reverse commitment (removal takes months to
+    # propagate) than this project needs to make unprompted -- add it later
+    # as a deliberate decision, not a default. Safe to send unconditionally
+    # (including over local plain-HTTP dev): browsers only ever honor this
+    # header on a response actually delivered over HTTPS, per spec.
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
 

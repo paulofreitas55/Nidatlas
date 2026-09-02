@@ -6,44 +6,55 @@ A web atlas of the birds of the Iberian Peninsula — Portugal and Spain,
 including the Azores, Madeira, the Canary Islands and the Balearics — built
 on public GBIF occurrence data.
 
+**Live at [nidatlas.com](https://nidatlas.com).**
+
 ![Nidatlas region map](docs/screenshot.png)
 
 ## What it does
 
+Four views, all live, all fully localised in **Portuguese, Spanish and
+English**:
+
 - **Species atlas** (the landing page) — all ~584 Iberian bird species as a
-  browsable, searchable card grid grouped by taxonomic order and family.
+  browsable, searchable card grid grouped by taxonomic order and family,
+  each with a real photo (see Photo credits below).
 - **Region map** — every district, province and named island shaded by
   total bird occurrences, with a side panel showing which species are most
   and least characteristic of the region you click, and a month filter.
-- **Species pages** — a photo (see Photo credits below), a seasonality
-  chart, a distribution map (down to a 10km grid cell) for any individual
-  species, including archipelago-aware views for island endemics, and its
-  position in the tree of life with its closest relatives.
+  Species pages (reached from either the atlas or the map) add a
+  seasonality chart, a distribution map down to a 10km grid cell —
+  including archipelago-aware views for island endemics — and the
+  species' position in the tree of life with its closest relatives.
 - **Tree of life** — the full phylogeny (Open Tree of Life) for every
   placed species, as a navigable rectangular cladogram.
 - **Rank** — every species ordered by raw recorded-occurrence count, most
   and least, clearly labelled as observation records rather than actual
   abundance (see the Region map for relative commonness by area).
-- **Identify** — upload or take a photo of a bird and get the model's top-5
-  guesses among Iberia's 584 species, each linked to its species page, with
-  a confidence score and an explicit "not confident" state rather than a
-  false-certain answer. An optional feature (see below) — off by default so
-  a deployment isn't forced to carry the ~1.7GB of model weights. A photo is
-  used only to run identification, never stored or shared, and discarded
-  once a result is returned — see the Privacy page (`/privacy`, linked from
-  every page's footer) for the full statement.
-- Fully localised in **Portuguese, Spanish and English**.
 
-Species identification also ships as a standalone CLI (`scripts/identify.py`),
-usable without running the web app at all. See [CLAUDE.md](CLAUDE.md)'s
-"Current state" section for what's built vs. planned (species description
-text, a personal sightings log, and deployment are the next pieces of
-work).
+### Species identification — built, not deployed
 
-### Enabling photo identification
+A fifth view, **Identify**, is fully implemented and tested but not live:
+upload or take a photo of a bird and get a BioCLIP 2 model's top-5 guesses
+among Iberia's 584 species, each linked to its species page, with a
+confidence score and an explicit "not confident" state rather than a
+false-certain answer. A photo is used only to run identification, never
+stored or shared, and discarded once a result is returned — see the
+Privacy page (`/privacy`) for the full statement.
 
-The IDENTIFY view is off by default — the app runs as a lightweight
-container without it. To turn it on:
+It's gated behind `ENABLE_IDENTIFY` (off by default) and left out of the
+hosted deployment specifically because of its measured resource cost: once
+the model loads, it holds **~6.8GB RAM**, and a cold start (Container Apps
+scaling from zero replicas) takes **~77 seconds** for the first request —
+both incompatible with the free-tier scale-to-zero hosting this project
+runs on. Nothing about the feature is unfinished: it's containerizable
+(`docker build --build-arg INCLUDE_IDENTIFY=true`), covered by tests
+(mocked, so the suite doesn't need the real model installed to run), and
+ships as a standalone CLI too (`scripts/identify.py`, usable without the
+web app at all). See [CLAUDE.md](CLAUDE.md)'s Deployment section for the
+full measurements and the two paths to enabling it on the live deployment
+later (baking in the model weights, resolving the memory footprint).
+
+### Enabling photo identification locally
 
 ```powershell
 pip install -r requirements-identify.txt   # pybioclip/PyTorch -- not in requirements.txt itself
@@ -177,6 +188,15 @@ coastline the map actually draws). See [CLAUDE.md](CLAUDE.md) for why.
 
   The seventh, `Emberiza rustica`, is more severe: its exact taxon match is flagged `"hidden"` in Open Tree's own taxonomy, so `induced_subtree` refuses the id outright rather than folding it into a placeholder. `src/queries.py`'s phylogeny functions treat all 7 as a valid "no tree placement" outcome (empty relatives list, not a 404), never a guessed-at position. See `scripts/fetch_phylogeny.py`'s own report for the up-to-date list if the resolution is ever rerun.
 - **Deployment is manual, including to Azure.** CI ([GitHub Actions](https://github.com/paulofreitas55/Nidatlas/actions), see [CLAUDE.md](CLAUDE.md)'s CI section) runs the test suite on every push and pull request, but does not build, push, or deploy anything. Building the Docker image, pushing it to the registry, and deploying to Azure Container Apps are all run by hand, deliberately — the app's Azure subscription sits in an institutional Entra ID tenant that restricts app-registration creation to admins, which is what GitHub Actions → Azure OIDC authentication requires. See CLAUDE.md's CI section for the exact manual commands and the steps that would enable automating this if that restriction is ever lifted.
-- **The live Azure deployment ships with IDENTIFY off** (`INCLUDE_IDENTIFY=false`) — a rollout decision, not a feature removal. The photo-identification feature itself is fully built, tested, and just as containerizable as the rest of the app (`docker build --build-arg INCLUDE_IDENTIFY=true`); it's left out of the hosted deployment specifically because its measured resource profile (~6.8GB RAM once the model loads, ~77s on a cold first request) is incompatible with Azure Container Apps' scale-to-zero model. Nothing about the code, the CLI (`scripts/identify.py`), or the Docker build path changes — see CLAUDE.md's Deployment section for the full reasoning and the two paths (baking in model weights, resolving the memory footprint) to enabling it later.
+- **The live deployment ships with IDENTIFY off** — see "Species identification — built, not deployed" above for the measured reason (~6.8GB RAM, ~77s cold start) and what would change to turn it on; a rollout decision, not a feature removal.
 - **Data updates require a rebuild.** `data/nidatlas.db` and the generated `static/*.geojson` files are baked into the Docker image at build time, not fetched at runtime — updating the data means rebuilding and redeploying the image, not editing a live volume. See CLAUDE.md's Deployment section.
 - **Rate limiting is single-process only, for now.** Both `/api/identify`'s and the general `/api/*` rate limiter keep their counters in memory, scoped to one running process — correct for the current single-worker deployment, but would need moving to a shared store or a reverse-proxy/CDN layer before running multiple workers or replicas. See CLAUDE.md's rate-limiting design decisions.
+
+## License
+
+The code in this repository is [MIT licensed](LICENSE). That covers the
+code only — the bundled GBIF occurrence data, GISCO administrative
+boundaries, OpenStreetMap land polygons, species photos, and the BioCLIP 2
+model each carry their own separate licence and attribution requirements;
+see [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for the full, source-by-source
+breakdown before reusing any of it.

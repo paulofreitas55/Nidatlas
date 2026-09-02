@@ -238,7 +238,6 @@ function render() {
   const canvas = document.getElementById("tree-canvas");
   canvas.innerHTML = "";
 
-  const t0 = performance.now();
   const slice = buildFullSlice();
   const svg = renderCladogram(state.rootId, slice, {
     colWidth: COL_WIDTH,
@@ -247,8 +246,6 @@ function render() {
     onNodeClick: toggleCollapse,
   });
   canvas.appendChild(svg);
-  const elapsed = performance.now() - t0;
-  console.log(`[tree] rendered ${Object.keys(slice).length} nodes in ${elapsed.toFixed(1)}ms`);
 
   state.baseWidth = Number(svg.dataset.baseWidth);
   state.baseHeight = Number(svg.dataset.baseHeight);

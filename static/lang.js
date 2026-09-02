@@ -105,6 +105,11 @@ function renderFooter(lang) {
     attributionLine.innerHTML = t("footer.attribution_line", lang, {
       osm: `<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>`,
       odbl: `<a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>`,
+      // CC BY 4.0 requires attribution (see ATTRIBUTIONS.md's GISCO row) --
+      // this is the one credit in this line that's a licence requirement,
+      // not a courtesy, so it must render here in all three languages, not
+      // just be documented in the repo.
+      gisco: `<a href="https://ec.europa.eu/eurostat/web/gisco">Eurostat GISCO</a>`,
       bioclip: `<a href="https://github.com/Imageomics/bioclip-2">BioCLIP 2</a>`,
       imageomics: "Imageomics Institute",
       opentree: `<a href="https://tree.opentreeoflife.org">Open Tree of Life</a>`,
