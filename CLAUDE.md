@@ -380,14 +380,35 @@ request time. `data/` itself is gitignored — every file in it, including
     `commons_filename`, e.g. `Some_bird.jpg`, no `File:` prefix). Tracked in
     git despite living under `data/` (see Conventions' curated-files list) —
     not pre-populated with guesses, a human adds a row only after actually
-    checking the candidate photo. Currently empty (header row only); use it
-    for whichever of the 40 remediated species (or any future one) still
+    checking the candidate photo. 5 rows as of 2026-09 (Cyanistes caeruleus,
+    Turdus philomelos, Columba livia, Sitta europaea pinned during the
+    2026-08 remediation; Psittacula krameri pinned during a 2026-09 25-species
+    re-screen after its automated re-pick put a person's arm/torso in frame)
+    — use it for whichever remediated species (or any future one) still
     doesn't look right after review.
 
 **`identify.py`** is not part of this pipeline — it's a standalone CLI
 (`python scripts/identify.py <image> [--species-list data/iberian_species.txt]`)
 that runs BioCLIP 2 on one photo and prints the top-5 predictions. Not
 called by anything else in the repo.
+
+**`build_sitemap.py`** writes `static/sitemap.xml` (build-time, not
+request-time — same pattern as every other file in `static/`: a pre-built
+artifact baked into the Docker image, not computed per request) from
+`data/nidatlas.db`'s species list: the 4 static views (`/`, `/map`, `/tree`,
+`/rank`) plus one `species.html?id=<id>` entry per species, all under the
+`https://nidatlas.com` canonical domain. Uses the CURRENT real species URL
+(a query string, not a clean `/species/<id>` path — that would need species
+pages to become a real per-species FastAPI route with server-rendered
+metadata, a separate piece of work not yet built) — regenerate this file if
+that migration ever happens, or the sitemap will point at stale URLs.
+`static/robots.txt` is hand-written (no per-species content, no need for a
+script) and points at the sitemap. **Both are served by the same
+`StaticFiles` mount as every other file in `static/`** — no dedicated route
+needed, `/sitemap.xml` and `/robots.txt` just work once the files exist
+there. **Requires step 3 (DB exists).** Safe to rerun any time; needs a
+rebuild+redeploy to actually reach the live site, same as every other
+static asset — see the Deployment section.
 
 ## Key design decisions (and why)
 
