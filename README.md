@@ -61,11 +61,12 @@ later (baking in the model weights, resolving the memory footprint).
 **Demo** (recorded locally with `ENABLE_IDENTIFY=1`, since this view isn't
 live on nidatlas.com): six photos — five real Iberian birds and one cat, to
 also show how the model handles a subject outside its 584-species scope.
-The frame below is the cat result; click it to open/download the full
-video (MP4, ~3.7MB — GitHub doesn't inline-preview video committed to a
-repo, so this opens the file's own page rather than playing in place).
+The frame below is a correct result (European Serin, 98% confidence);
+click it to open/download the full video (MP4, ~3.6MB — GitHub doesn't
+inline-preview video committed to a repo, so this opens the file's own
+page rather than playing in place).
 
-[![IDENTIFY demo — click to open the full video (the model correctly declining to guess on a cat photo)](docs/identify-demo-thumb.png)](docs/identify-demo.mp4)
+[![IDENTIFY demo — click to open the full video (a correctly identified European Serin at 98% confidence)](docs/identify-demo-thumb.png)](docs/identify-demo.mp4)
 
 ### Enabling photo identification locally
 
