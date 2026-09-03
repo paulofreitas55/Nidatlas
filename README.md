@@ -58,6 +58,14 @@ web app at all). See [CLAUDE.md](CLAUDE.md)'s Deployment section for the
 full measurements and the two paths to enabling it on the live deployment
 later (baking in the model weights, resolving the memory footprint).
 
+**Demo** (recorded locally with `ENABLE_IDENTIFY=1`, since this view isn't
+live on nidatlas.com): six photos — five real Iberian birds and one cat, to
+also show how the model handles a subject outside its 584-species scope.
+
+<video src="https://raw.githubusercontent.com/paulofreitas55/Nidatlas/main/docs/identify-demo.mp4" controls width="640">
+  Your browser doesn't support inline video — <a href="docs/identify-demo.mp4">watch the demo directly</a>.
+</video>
+
 ### Enabling photo identification locally
 
 ```powershell
