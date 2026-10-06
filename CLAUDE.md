@@ -948,6 +948,17 @@ static asset — see the Deployment section.
   than forwarding a client-supplied one unchanged** — true for Azure
   Container Apps' built-in ingress and most managed reverse proxies, not
   necessarily true for an unconfigured raw nginx passthrough.
+  **Since Cloudflare went in front (2026-10-06) this no longer fully
+  holds:** Cloudflare *appends* the visitor's IP to any `X-Forwarded-For`
+  the client already sent (Cloudflare's own docs), so the first entry —
+  what `_client_ip` reads — is client-controlled when a client sends that
+  header itself. Real browsers don't, so normal visitors are still keyed
+  correctly; a script can dodge the per-IP limit by sending a fake one.
+  Cached responses never reach the app, which limits the impact. The
+  proper fix is to key on `CF-Connecting-IP` (set by Cloudflare) *and*
+  restrict ingress to Cloudflare's IP ranges — without the restriction, a
+  request sent straight to the origin can fake that header too. Not done
+  yet; see "Cloudflare in front of the app" in the Deployment section.
 - **Upload path: no multipart, no disk spooling — a real bug, found and
   fixed via direct reproduction both times, not by inspection alone.** The
   original `/api/identify` implementation used FastAPI's
@@ -1345,8 +1356,11 @@ different subscription without that restriction, there's no reason to
 change it — just don't assume `westeurope` (or any unlisted region) works
 here without checking `az policy assignment list` first.
 
-**Custom domain: `nidatlas.com` and `www.nidatlas.com`, both bound with
-Azure-managed certificates.** DNS is hosted on Cloudflare. Bound via:
+**Custom domain: `nidatlas.com` and `www.nidatlas.com`, served through
+Cloudflare's proxy since 2026-10-06** (see "Cloudflare in front of the app"
+below — that section supersedes the managed-certificate setup described
+next, which is kept because it's also the rollback path). DNS is hosted on
+Cloudflare. Originally bound with Azure-managed certificates via:
 
 ```powershell
 az containerapp hostname add -n nidatlas -g nidatlas-rg --hostname nidatlas.com
@@ -1371,24 +1385,98 @@ validation — different validation methods per Azure's own requirement):
 | TXT | `asuid.www` | same verification ID as above — one ID covers every hostname on the same Container App |
 | CNAME | `www` | the Container App's own generated FQDN (e.g. `nidatlas.<hash>.francecentral.azurecontainerapps.io`) — **must point directly at this, never at the apex domain**; an intermediate CNAME hop blocks both certificate issuance and renewal (Microsoft's own docs call this out explicitly) |
 
-**Cloudflare proxy MUST stay DNS-only (grey cloud) on both the `@` A
-record and the `www` CNAME — permanently, not just during initial
-validation.** Caught directly during setup: the apex was briefly proxied
-(orange cloud) and resolved to Cloudflare's own edge IPs
-(`104.21.x.x`/`172.67.x.x` ranges) instead of the real Azure static IP,
-which would have made Azure's HTTP domain-validation request hit
-Cloudflare's edge instead of the actual Container App and fail outright.
-The reason this has to stay grey-cloud forever, not just be flipped back
-after the first successful bind: Azure's managed certificates
-**auto-renew** using the exact same direct-reachability check. Flip proxy
-to orange later and the site keeps working fine right up until the
-certificate's next renewal window, which then silently fails — the failure
-is invisible until the cert actually expires, months after the change that
-caused it. If Cloudflare's CDN/proxy features are ever wanted, that needs a
-different architecture (e.g. Azure Front Door in front of the Container
-App), not just flipping this toggle.
+**Why the managed certificates had to go before the proxy could be turned
+on.** Azure's managed certificates renew only while the apex A record
+points at the environment's IP and the `www` CNAME points directly at the
+app's FQDN — Microsoft's docs: *"Mapping to an intermediate CNAME value
+blocks certificate issuance and renewal. Examples of CNAME values are
+traffic managers, Cloudflare, and similar services."* With the proxy on,
+both resolve to Cloudflare's edge (`104.21.x.x`/`172.67.x.x`), so renewal
+would silently fail months later and the site would go down with
+Cloudflare error 526. Until 2026-10-06 the rule here was therefore "the
+proxy must stay DNS-only, permanently". That rule is now **reversed** — see
+the next section.
 
-Verified end-to-end after binding, not assumed: `https://nidatlas.com/` and
+### Cloudflare in front of the app (since 2026-10-06)
+
+**Why:** September 2026 cost €0.80 because bot traffic woke the
+scale-to-zero container ~150 times a day, exhausting the Container Apps
+free grant on 22 September. A replay of a real week of request logs showed
+edge caching cuts container starts by 46–88%, while blocking scanner paths
+alone cuts ~2% (scanners arrive in bursts, so a burst costs one start;
+crawlers fetching species pages one at a time across the day are what
+cause starts). See the Cache-Control policy design decision for the
+app-side half (`s-maxage`).
+
+**Certificates:** both custom domains are bound to a **Cloudflare Origin CA
+certificate** uploaded to the environment as `cloudflare-origin-2041`
+(RSA 2048, `nidatlas.com` + `*.nidatlas.com`, expires **2041-10-02** — no
+renewals). Only Cloudflare trusts it; visitors see Cloudflare's own edge
+certificate (Google Trust Services, auto-renewed by Cloudflare). Its
+private key is kept on the maintainer's machine, outside the repo, and is
+never committed. Uploading needs a password-protected PFX built from the
+two PEM files (`openssl pkcs12 -export ...`); delete the PFX afterwards.
+
+**The proxy (orange cloud) must now stay ON for `@` and `www`.** Turning it
+off, or pausing Cloudflare, sends visitors straight to Azure, which then
+presents the Origin CA certificate — browsers don't trust it, so the site
+shows certificate errors. The two `asuid` TXT records stay DNS-only (Azure
+still uses them to verify domain ownership; rebinding to the Origin cert
+worked with the proxy on, needing only those TXT records).
+
+**Rollback:** turn the proxy off for both records, then rebind each domain
+to a managed certificate with the two `hostname bind` commands above (no
+`--certificate`; Azure re-uses or re-issues one). Expect a few minutes of
+certificate errors in between. The original managed certificates
+(`mc-nidatlas-env-nidatlas-com-6887`, `mc-nidatlas-env-www-nidatlas-com-0712`)
+were left in the environment, unbound, after the switch.
+
+**Cloudflare configuration (free plan), set in the dashboard by the
+maintainer:**
+- SSL/TLS mode **Full (strict)**; **Always Use HTTPS** on (so HTTP→HTTPS
+  redirects happen at the edge without waking the container); minimum
+  TLS 1.2. Not Flexible: ingress has `allowInsecure: false`, so Azure
+  redirects HTTP to HTTPS and Flexible would loop.
+- WAF custom rule **"Allow app URLs only"** (action Block): an
+  *allow-list* of every page route, every static file by exact name, and
+  the `/species/`, `/api/`, `/og/`, `/cdn-cgi/` prefixes. **When adding a
+  page, a static file or a new route prefix, add it to this rule**, or
+  Cloudflare will 403 it. Replaying a week of logs, it would have blocked
+  1,059 requests across 446 scanner paths and none the app actually served.
+- Cache Rule: all requests **Eligible for cache**, Edge TTL **"Use
+  cache-control header if present, bypass cache if not"**, Browser TTL
+  **Respect origin**, default cache key (query strings included). The
+  app's `s-maxage` therefore decides what the edge keeps (30 days), and
+  anything with `no-store` or no `Cache-Control` is never cached.
+- **Smart Tiered Cache** on; **Rocket Loader off** (and no other feature
+  that injects scripts — the CSP would block them).
+
+**Verified live on 2026-10-06, not assumed:** HTTP redirects with 301 from
+Cloudflare; TLS 1.0/1.1 refused by Cloudflare with a protocol-version
+alert; 9 scanner paths (`/.git/config`, `/wp-login.php`, `/xmlrpc.php`,
+`/vendor/...`, ...) 403 at the edge; all 47 real pages/files/API endpoints
+return correct statuses and are a cache `HIT` on the second request, while
+`/api/health` and `/api/config` show `BYPASS`; HTML served through
+Cloudflare is byte-identical to the origin's (nothing injected); HSTS/CSP
+and the other security headers still arrive; a headless-Chrome run of the
+atlas, map, tree, rank and species pages rendered all their real data with
+zero console errors, CSP violations or failed requests, including the
+EN→PT language switch.
+
+**Known gap:** the origin is still reachable directly — at the app's
+`*.azurecontainerapps.io` FQDN and the environment IP — so bots that find
+it bypass Cloudflare. ~200 container starts a week (before Cloudflare) had
+no logged request at all, which may be such traffic or clients giving up
+during the ~25s cold start. Restricting ingress to Cloudflare's IP ranges
+(`az containerapp ingress access-restriction`) would close it, but
+Microsoft's docs don't say which client IP the restriction evaluates when
+a proxy is in front, so test it carefully before relying on it.
+
+**After every deploy: Cloudflare → Caching → Configuration → Purge
+Everything.** The edge keeps responses for up to 30 days and won't see a
+new image otherwise. See the deploy commands in the CI section.
+
+Verified end-to-end after the original binding (2026-09): `https://nidatlas.com/` and
 `https://www.nidatlas.com/` both return `200` with a valid trusted
 certificate chain (`CN=nidatlas.com`, issued by DigiCert/GeoTrust TLS RSA CA
 G1), `http://nidatlas.com/` redirects to `https://` (`301`), and the
@@ -1710,15 +1798,26 @@ catches that, and must still be done before merging any such change.
 **Manual build/push/deploy, after a green CI run:**
 
 ```powershell
-docker build -t ghcr.io/paulofreitas55/nidatlas:latest .
+$sha = git rev-parse --short HEAD
+docker build -t ghcr.io/paulofreitas55/nidatlas:$sha -t ghcr.io/paulofreitas55/nidatlas:latest .
+docker push ghcr.io/paulofreitas55/nidatlas:$sha
 docker push ghcr.io/paulofreitas55/nidatlas:latest
-az containerapp update --resource-group nidatlas-rg --name nidatlas --image ghcr.io/paulofreitas55/nidatlas:latest
+az containerapp update --resource-group nidatlas-rg --name nidatlas --image ghcr.io/paulofreitas55/nidatlas:$sha
 ```
 
-To roll back to a specific previous build, tag and push that commit's image
-with its SHA before pushing `:latest` over it (`docker build -t
-ghcr.io/paulofreitas55/nidatlas:<sha> .`), then point the Container App at
-that specific tag instead of `:latest`:
+Then **purge Cloudflare's cache** (dashboard → Caching → Configuration →
+Purge Everything) — the edge holds responses for up to 30 days and won't
+notice the new image otherwise.
+
+**Always deploy the SHA tag, never `:latest`.** `az containerapp update
+--image` does not create a new revision when the image string is
+textually unchanged, even if `:latest` now points at a different image on
+the registry — the "deploy" succeeds and the old code keeps running (caught
+directly: a fix appeared deployed but wasn't live until redeployed under a
+unique tag). `:latest` is still pushed for convenience, not deployed.
+
+To roll back, point the Container App at a previous commit's tag (and
+purge Cloudflare again):
 
 ```powershell
 az containerapp update --resource-group nidatlas-rg --name nidatlas --image ghcr.io/paulofreitas55/nidatlas:<sha>
