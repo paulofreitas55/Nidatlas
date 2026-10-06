@@ -877,6 +877,26 @@ static asset — see the Deployment section.
   an operator turns the feature on); `/api/identify` is a POST with
   per-request rate-limiting and upload side effects, not a cacheable GET
   resource in the first place.
+  **Edge cache layer (added 2026-10, for Cloudflare in front of the app):**
+  both cacheable values also carry `s-maxage=2592000` (30 days), which
+  only shared caches like Cloudflare honour — browsers keep the 1-day /
+  1-minute `max-age` above. Measured motivation: September 2026 cost €0.80
+  because bot traffic woke the scale-to-zero container ~150 times a day
+  (crawlers on species pages spread through the day, not the scanner
+  bursts), and a replay of a real week of requests showed edge caching
+  cuts container starts by 46–88% while blocking scanner paths alone cuts
+  ~2%. The edge can hold responses far longer than browsers because a
+  Cloudflare **Purge Everything after every redeploy** clears it, while a
+  browser's copy can't be cleared remotely (the stale-`species.js` problem
+  after the `/species/{id}` migration). Only statuses in
+  `_SHAREABLE_STATUSES` (200, 206, 301, 304, 308, 404 — deterministic for
+  a given deployed image) get these headers; everything else (5xx, 422,
+  405, 307) gets `no-store`, since caching a transient failure at the edge
+  would serve it to every visitor for weeks. A rate-limited 429 never
+  reaches `cache_control_headers` at all (the rate-limit middleware wraps
+  it) and goes out with no `Cache-Control`, which the Cloudflare cache rule
+  ("use cache-control header if present, bypass cache if not") also
+  leaves uncached — verified directly, not inferred from middleware order.
 - **The in-process rate limiters assume a single worker — known limitation,
   not yet redesigned.** `_SlidingWindowRateLimiter` in `src/api.py` (shared
   by `/api/identify`'s 10/min limiter and the general `/api/*` 100/min one
@@ -1189,7 +1209,7 @@ static asset — see the Deployment section.
 
 **Done:** the full data pipeline (species list → cube → SQLite →
 vernacular names → administrative regions → phylogeny → species photos),
-the query layer and FastAPI backend with a 52-test pytest suite, and all
+the query layer and FastAPI backend with a 65-test pytest suite, and all
 seven frontend pages (species atlas grid landing page, region map, species
 detail page, tree of life view, occurrence-count ranking, photo
 identification, privacy) fully implemented and localized in pt/es/en with
@@ -1629,7 +1649,7 @@ python -m pytest tests/ -q
 
 Requires `data/nidatlas.db` to exist and be fully built (species +
 regions + grid_cells assignment + phylogeny all populated) — the test suite
-hits the real FastAPI app against the real local database, not a mock. 52
+hits the real FastAPI app against the real local database, not a mock. 65
 tests, should all pass on a correctly rebuilt database. `tests/conftest.py`
 sets `ENABLE_IDENTIFY=1` before any test module imports `src/api.py` (that
 flag is read once at import time — see "IDENTIFY feature isolation" in
@@ -1639,14 +1659,14 @@ which test file pytest happens to import `api` from first;
 itself, so the suite never loads the real model and doesn't need
 `pybioclip`/PyTorch installed to run.
 
-37 of these 52 are marked `@pytest.mark.requires_full_dataset` (registered
+40 of these 65 are marked `@pytest.mark.requires_full_dataset` (registered
 in `pytest.ini`) — they assert specific facts only the real, GBIF-derived
 dataset has (a Madeira endemic ranking top-by-concentration, a genuine
 occurrence-count tie, a real MRCA in the Open Tree of Life subtree, the
 Azores' individual named islands, ...), so they're meaningless (or, for a
 handful, vacuously true) against an empty database. This marker exists for
 CI — see the next section — not for local development: running the suite
-locally with no `-m` filter, as above, always runs all 52 against the real
+locally with no `-m` filter, as above, always runs all 65 against the real
 database and is what to do before merging any change to query logic.
 
 ## CI
@@ -1656,12 +1676,12 @@ request: install `requirements.txt`, build a schema-only fixture database
 (`scripts/build_fixture_db.py` — every table this project's schema defines,
 reusing `build_database.py`'s own `SCHEMA` string so it can't drift from a
 real rebuild, but zero rows), then `pytest -m "not requires_full_dataset"`
-— the 15 tests that don't need real data content (pure validation/404
-paths, `/api/health`, `/api/identify`'s error paths). This is a genuine,
+— the 25 tests that don't need real data content (pure validation/404
+paths, `/api/health`, `/api/identify`'s error paths, Cache-Control headers). This is a genuine,
 non-mocked smoke test (the app actually imports, starts, and answers real
 HTTP requests with the right status codes) but a partial one: it cannot
 catch a regression in query logic itself (a broken ranking, a wrong MRCA)
-— only running the full 52-test suite locally against the real database
+— only running the full 65-test suite locally against the real database
 catches that, and must still be done before merging any such change.
 
 **What this workflow deliberately does not do, and why:**

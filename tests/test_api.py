@@ -773,3 +773,56 @@ def test_phylo_neighbourhood_prunes_a_widely_scattered_relatives_set(
 def test_phylo_neighbourhood_unknown_species_gives_404(client: TestClient) -> None:
     response = client.get("/api/species/999999/phylo-neighbourhood")
     assert response.status_code == 404
+
+
+# Cache-Control: browsers get max-age, Cloudflare gets the much longer
+# s-maxage (cleared by a purge after each redeploy). None of these need the
+# real dataset -- they hold on an empty fixture database too, so CI runs them.
+
+EDGE_TTL = "s-maxage=2592000"
+
+
+def test_static_asset_is_cached_one_day_in_browsers_and_long_at_the_edge(client: TestClient) -> None:
+    response = client.get("/style.css")
+    assert response.status_code == 200
+    cache = response.headers["cache-control"]
+    assert "public" in cache
+    assert "max-age=86400" in cache
+    assert EDGE_TTL in cache
+
+
+def test_api_get_is_cached_one_minute_in_browsers_and_long_at_the_edge(client: TestClient) -> None:
+    response = client.get("/api/species/all")
+    assert response.status_code == 200
+    cache = response.headers["cache-control"]
+    assert "max-age=60" in cache
+    assert EDGE_TTL in cache
+
+
+def test_health_and_config_are_never_cached(client: TestClient) -> None:
+    for path in ("/api/health", "/api/config"):
+        assert client.get(path).headers["cache-control"] == "no-store", path
+
+
+def test_legacy_redirect_and_404_are_shareable_at_the_edge(client: TestClient) -> None:
+    # Both are deterministic for a given deployed image, so caching them at
+    # the edge is correct and keeps repeat crawler hits off the container.
+    redirect = client.get("/species.html", params={"id": 1}, follow_redirects=False)
+    assert redirect.status_code == 301
+    assert EDGE_TTL in redirect.headers["cache-control"]
+
+    missing = client.get("/api/species/999999")
+    assert missing.status_code == 404
+    assert EDGE_TTL in missing.headers["cache-control"]
+
+
+def test_transient_or_request_specific_errors_are_never_cached(client: TestClient) -> None:
+    # A 422 or 405 cached at the edge would be served to every visitor for
+    # weeks; only the statuses in api._SHAREABLE_STATUSES may be shared.
+    invalid = client.get("/api/species", params={"q": "x" * 101})
+    assert invalid.status_code == 422
+    assert invalid.headers["cache-control"] == "no-store"
+
+    wrong_method = client.post("/api/species/all")
+    assert wrong_method.status_code == 405
+    assert wrong_method.headers["cache-control"] == "no-store"

@@ -85,9 +85,24 @@ app.add_middleware(RequestBodyLimitMiddleware, max_body_size=_MAX_REQUEST_BODY_B
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-_CACHE_LONG = "public, max-age=86400"  # static assets/images: 1 day
-_CACHE_SHORT = "public, max-age=60"  # read-only /api/* GETs: 1 minute
+# max-age is what browsers use; s-maxage is what shared caches (Cloudflare,
+# in front of this app -- see CLAUDE.md's Deployment section) use instead.
+# The edge can hold a response far longer than a browser because a
+# Cloudflare purge after each redeploy clears it, while a browser's copy
+# can't be cleared remotely at all. 30 days bounds the staleness if a purge
+# is ever forgotten.
+_EDGE_TTL_SECONDS = 30 * 86400
+_CACHE_LONG = f"public, max-age=86400, s-maxage={_EDGE_TTL_SECONDS}"  # pages/static: 1 day in browsers
+_CACHE_SHORT = f"public, max-age=60, s-maxage={_EDGE_TTL_SECONDS}"  # read-only /api/* GETs: 1 minute in browsers
 _CACHE_NONE = "no-store"
+
+# Only these statuses are safe to share across visitors for the edge TTL
+# above: each is a deterministic answer for the URL given the deployed
+# image's fixed data (a 404 for /species/99999 stays a 404 until the next
+# deploy). Everything else -- 5xx, a 429, a 422 validation error, a 307 --
+# is transient or request-specific, and caching it at the edge would serve
+# that one failure to every visitor for weeks.
+_SHAREABLE_STATUSES = {200, 206, 301, 304, 308, 404}
 
 # Endpoints that must never be cached regardless of the /api/ prefix rule
 # below: /api/health and /api/config are cheap to recompute but wrong to
@@ -118,9 +133,14 @@ async def cache_control_headers(request, call_next):
     # complexity of per-route invalidation. The three paths in
     # _CACHE_NONE_PATHS above are carved out because caching them at all
     # would be actively wrong, not just imprecise.
+    #
+    # A 429 from enforce_general_api_rate_limit never reaches this function:
+    # that middleware is registered later, so it wraps this one and returns
+    # before call_next() gets here. It goes out with no Cache-Control at all,
+    # which the Cloudflare cache rule treats as "don't cache".
     response = await call_next(request)
     path = request.url.path
-    if path in _CACHE_NONE_PATHS:
+    if path in _CACHE_NONE_PATHS or response.status_code not in _SHAREABLE_STATUSES:
         response.headers["Cache-Control"] = _CACHE_NONE
     elif path.startswith("/api/"):
         response.headers["Cache-Control"] = _CACHE_SHORT
